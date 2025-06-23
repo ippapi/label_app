@@ -70,7 +70,7 @@ if uploaded_file:
         for i, ex in enumerate(subset):
             id_to_tab_index[ex["clean_id"]] = (tab_name, i)
 
-    # Handle ID Search
+    # Handle search
     if search_button and search_id:
         if search_id in id_to_tab_index:
             found_tab, found_index = id_to_tab_index[search_id]
@@ -80,13 +80,17 @@ if uploaded_file:
         else:
             st.warning(f"⚠️ Không tìm thấy ID `{search_id}` trong dữ liệu.")
 
-    # Render Tabs
+    # Tabs rendering (compatible version)
     tab_names = list(tab_groups.keys())
-    default_index = tab_names.index(st.session_state.get("active_tab", tab_names[0]))
-    tabs = st.tabs(tab_names, index=default_index)
+    active_tab = st.session_state.get("active_tab", tab_names[0])
+    tabs = st.tabs(tab_names)
 
-    for i, (tab_name, subset) in enumerate(tab_groups.items()):
+    for i, tab_name in enumerate(tab_names):
+        subset = tab_groups[tab_name]
         with tabs[i]:
+            if tab_name != active_tab:
+                continue  # Skip other tabs
+
             st.markdown(f"### 📊 Số lượng mẫu: {len(subset)}")
 
             index_key = f"{tab_name}_index"
@@ -149,7 +153,7 @@ if uploaded_file:
                 col2.markdown(f"**🤖 Auto-assigned:** `{auto_label or 'None'}`")
                 col3.markdown(f"**👤 Final label:** `{current_label}`{final_note}")
 
-    # Export JSON
+    # Export
     if export_trigger:
         for example in data:
             cid = example["clean_id"]
