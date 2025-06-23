@@ -9,15 +9,14 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Sidebar: chỉ còn tải file + export
+# Sidebar: chỉ để tải file và export
 with st.sidebar:
     st.title("📂 File dữ liệu")
-
     uploaded_file = st.file_uploader("📤 Tải file JSON", type=["json"])
     export_filename = st.text_input("💾 Tên file xuất (.json)", value="updated_labeled.json")
     export_trigger = st.button("📥 Tải xuống file kết quả")
 
-# 🧠 Data processing
+# 🧠 Xử lý dữ liệu
 if uploaded_file:
     data = json.load(uploaded_file)
     st.session_state["data_loaded"] = True
@@ -44,7 +43,7 @@ if uploaded_file:
         example["num_agree"] = num_agree
         example["model_votes"] = model_votes
 
-    # Tabs
+    # Tabs nhóm mẫu
     tab_groups = {
         "🧠 Auto-assigned": [ex for ex in data if ex["override_type"] == "auto"],
         "✍️ Manually assigned": [
@@ -72,18 +71,30 @@ if uploaded_file:
             if index_key not in st.session_state:
                 st.session_state[index_key] = 0
 
-            # === Tìm kiếm trong tab hiện tại ===
+            # === Tìm theo ID hoặc vị trí trong tab ===
             col1, col2, col3 = st.columns([4, 3, 3])
 
             with col1:
-                search_id = st.text_input(f"🔎 Tìm theo ID (chỉ số)", key=f"{tab_name}_search_id")
+                search_id = st.text_input("🔎 Tìm theo ID (chỉ số)", key=f"{tab_name}_search_id")
+
             with col2:
-                goto_page = st.number_input("🔢 Đi đến vị trí", min_value=1, step=1,
-                                            max_value=len(subset), key=f"{tab_name}_goto_index")
+                max_page = max(1, len(subset))
+                default_goto = min(
+                    st.session_state.get(f"{tab_name}_goto_index", 1),
+                    max_page
+                )
+                goto_page = st.number_input(
+                    "🔢 Đi đến vị trí",
+                    min_value=1,
+                    max_value=max_page,
+                    step=1,
+                    value=default_goto,
+                    key=f"{tab_name}_goto_index"
+                )
+
             with col3:
                 if st.button("🚀 Tìm / Chuyển trang", key=f"{tab_name}_search_btn"):
                     found = False
-                    # Ưu tiên tìm theo ID nếu có
                     if search_id:
                         for idx, ex in enumerate(subset):
                             if ex["clean_id"] == search_id:
@@ -157,7 +168,7 @@ if uploaded_file:
                 col2.markdown(f"**🤖 Auto-assigned:** `{auto_label or 'None'}`")
                 col3.markdown(f"**👤 Final label:** `{current_label}`{final_note}")
 
-    # Export file
+    # Export
     if export_trigger:
         for example in data:
             cid = example["clean_id"]
@@ -167,6 +178,5 @@ if uploaded_file:
         json_str = json.dumps(data, ensure_ascii=False, indent=2)
         st.download_button("📥 Click để tải JSON", data=json_str.encode("utf-8"),
                            file_name=export_filename, mime="application/json")
-
 else:
     st.info("📥 Vui lòng tải file JSON từ sidebar để bắt đầu.")
