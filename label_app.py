@@ -5,17 +5,14 @@ from collections import Counter
 st.set_page_config(layout="wide")
 st.title("🔍 Multihop NLI Label Review App")
 
-# ⏫ Sidebar: Import file
-st.sidebar.header("📤 Import & Tabs")
-uploaded_file = st.sidebar.file_uploader("Upload labeled JSON", type=["json"])
+uploaded_file = st.sidebar.file_uploader("📤 Upload labeled JSON file", type=["json"])
 
 if uploaded_file:
     data = json.load(uploaded_file)
-    st.success(f"✅ Đã tải {len(data)} mẫu.")
+    st.success(f"Loaded {len(data)} examples.")
 
     edited_examples = {}
 
-    # Gán nhãn tự động
     for example in data:
         validated_labels = {k: v for k, v in example.items() if k.endswith("_validated")}
         label_counts = Counter(validated_labels.values())
@@ -44,60 +41,77 @@ if uploaded_file:
         example["num_agree"] = num_agree
         example["model_votes"] = model_votes
 
-    # ⏩ Sidebar: chọn nhóm mẫu
-    tab_name = st.sidebar.selectbox("📂 Chọn nhóm mẫu", [
-        "🧠 Auto-assigned",
-        "✍️ Manually assigned",
-        "✅ 3/3 models agree",
-        "⚠️ 2/3 models agree",
-        "❌ 1/3 or all different",
-        "🟩 entailment",
-        "🟥 contradiction",
-        "🟨 neutral",
-        "🟦 implicature",
-    ])
+    mode = st.sidebar.radio("🛠️ Chế độ hiển thị", ["📄 Phân trang", "⚡ Quick review"])
+    filtered_data = data
 
-    group_filters = {
-        "🧠 Auto-assigned": [ex for ex in data if ex["override_type"] == "auto"],
-        "✍️ Manually assigned": [
-            ex for ex in data if ex["override_type"] == "manual" and ex["auto_label"] is not None and ex["label"] != ex["auto_label"]
-        ],
-        "✅ 3/3 models agree": [ex for ex in data if ex["num_agree"] == 3],
-        "⚠️ 2/3 models agree": [ex for ex in data if ex["num_agree"] == 2],
-        "❌ 1/3 or all different": [ex for ex in data if ex["num_agree"] <= 1],
-        "🟩 entailment": [ex for ex in data if ex["label"] == "entailment"],
-        "🟥 contradiction": [ex for ex in data if ex["label"] == "contradiction"],
-        "🟨 neutral": [ex for ex in data if ex["label"] == "neutral"],
-        "🟦 implicature": [ex for ex in data if ex["label"] == "implicature"],
-    }
+    if mode == "📄 Phân trang":
+        page_size = 10
+        total = len(filtered_data)
+        total_pages = (total - 1) // page_size + 1
+        current_page = st.sidebar.number_input("📄 Page", min_value=1, max_value=total_pages, step=1)
 
-    filtered_data = group_filters[tab_name]
-    total = len(filtered_data)
-    st.markdown(f"### 📊 Số lượng mẫu: `{total}`")
+        start = (current_page - 1) * page_size
+        end = min(start + page_size, total)
+        st.markdown(f"### 📊 Hiển thị mẫu {start + 1}–{end} / {total}")
 
-    # Pagination
-    page_size = 1
-    max_page = (total - 1) // page_size + 1
-    if "page" not in st.session_state:
-        st.session_state.page = 1
+        for example in filtered_data[start:end]:
+            st.markdown("---")
+            example_id = example["id"]
+            premises = example["premises"]
+            hypothesis = example["hypothesis"]
+            original_label = example["original_label"]
+            auto_label = example["auto_label"]
+            model_votes = example["model_votes"]
+            current_label = edited_examples.get(example_id, example["label"])
 
-    col_prev, col_info, col_next = st.columns([1, 2, 1])
-    with col_prev:
-        if st.button("⬅️ Prev") and st.session_state.page > 1:
-            st.session_state.page -= 1
-    with col_info:
-        st.markdown(f"### 📄 Trang `{st.session_state.page}` / `{max_page}`")
-    with col_next:
-        if st.button("Next ➡️") and st.session_state.page < max_page:
-            st.session_state.page += 1
+            st.markdown(f"**🧾 ID:** `{example_id}`")
+            for j, p in enumerate(premises):
+                st.markdown(f"**Premise {j+1}:** {p}")
+            st.markdown(f"**🔮 Hypothesis:** {hypothesis}")
 
-    # Hiển thị example hiện tại
-    start_idx = (st.session_state.page - 1) * page_size
-    end_idx = start_idx + page_size
-    current_examples = filtered_data[start_idx:end_idx]
+            st.markdown("**🧠 Model votes:**")
+            for model, vote in model_votes.items():
+                st.markdown(f"- `{model}` → **{vote}**")
 
-    for example in current_examples:
-        st.markdown("---")
+            with st.expander("✏️ Chỉnh nhãn"):
+                key = f"edit_{example_id}"
+                override = st.selectbox(
+                    "Chọn nhãn mới:",
+                    ["", "entailment", "contradiction", "neutral", "implicature"],
+                    key=key,
+                )
+                if override:
+                    current_label = override
+                    edited_examples[example_id] = override
+
+            if auto_label is None:
+                final_note = " (no auto-assigned label)"
+            elif current_label == auto_label:
+                final_note = " (auto-assigned)"
+            else:
+                final_note = " (overridden manually)"
+
+            col1, col2, col3 = st.columns(3)
+            col1.markdown(f"**🔖 Original:** `{original_label}`")
+            col2.markdown(f"**🤖 Auto:** `{auto_label or 'None'}`")
+            col3.markdown(f"**👤 Final:** `{current_label}`{final_note}")
+
+    elif mode == "⚡ Quick review":
+        total = len(filtered_data)
+        if "quick_index" not in st.session_state:
+            st.session_state.quick_index = 0
+
+        col_prev, col_jump, col_next = st.columns([1, 4, 1])
+        with col_prev:
+            if st.button("⏪ Prev") and st.session_state.quick_index > 0:
+                st.session_state.quick_index -= 1
+        with col_jump:
+            st.number_input("🔢 Jump to index", 0, total - 1, key="quick_index", step=1)
+        with col_next:
+            if st.button("⏩ Next") and st.session_state.quick_index < total - 1:
+                st.session_state.quick_index += 1
+
+        example = filtered_data[st.session_state.quick_index]
         example_id = example["id"]
         premises = example["premises"]
         hypothesis = example["hypothesis"]
@@ -106,17 +120,18 @@ if uploaded_file:
         model_votes = example["model_votes"]
         current_label = edited_examples.get(example_id, example["label"])
 
+        st.markdown("---")
         st.markdown(f"**🧾 ID:** `{example_id}`")
         for j, p in enumerate(premises):
             st.markdown(f"**Premise {j+1}:** {p}")
         st.markdown(f"**🔮 Hypothesis:** {hypothesis}")
 
-        st.markdown("#### 🧠 Model votes:")
+        st.markdown("**🧠 Model votes:**")
         for model, vote in model_votes.items():
             st.markdown(f"- `{model}` → **{vote}**")
 
-        with st.expander("✏️ Chỉnh nhãn thủ công (nếu cần)"):
-            key = f"{tab_name}_{example_id}_override"
+        with st.expander("✏️ Chỉnh nhãn"):
+            key = f"quick_edit_{example_id}"
             override = st.selectbox(
                 "Chọn nhãn mới:",
                 ["", "entailment", "contradiction", "neutral", "implicature"],
@@ -134,15 +149,14 @@ if uploaded_file:
             final_note = " (overridden manually)"
 
         col1, col2, col3 = st.columns(3)
-        col1.markdown(f"**🔖 Original label:** `{original_label}`")
-        col2.markdown(f"**🤖 Auto-assigned:** `{auto_label if auto_label else 'None'}`")
-        col3.markdown(f"**👤 Final label:** `{current_label}`{final_note}")
+        col1.markdown(f"**🔖 Original:** `{original_label}`")
+        col2.markdown(f"**🤖 Auto:** `{auto_label or 'None'}`")
+        col3.markdown(f"**👤 Final:** `{current_label}`{final_note}")
 
-    # ⬇️ Sidebar: Export
-    st.sidebar.header("💾 Export")
+    st.sidebar.markdown("## 💾 Export kết quả")
     filename = st.sidebar.text_input("Tên file xuất (.json)", value="updated_labeled.json")
 
-    if st.sidebar.button("💾 Tải về JSON"):
+    if st.sidebar.button("📥 Tải về JSON"):
         for example in data:
             example_id = example["id"]
             if example_id in edited_examples:
@@ -153,7 +167,7 @@ if uploaded_file:
 
         json_str = json.dumps(data, ensure_ascii=False, indent=2)
         st.sidebar.download_button(
-            label="📥 Click để tải JSON",
+            label="💾 Click để tải JSON",
             file_name=filename,
             mime="application/json",
             data=json_str.encode("utf-8"),
