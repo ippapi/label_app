@@ -3,25 +3,21 @@ import json
 import re
 from collections import Counter
 
-# 🎨 App config
 st.set_page_config(
     page_title="Multihop NLI Label Review",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# 🌐 Sidebar
+# Sidebar: chỉ còn tải file + export
 with st.sidebar:
-    st.title("🧭 Điều hướng")
+    st.title("📂 File dữ liệu")
 
     uploaded_file = st.file_uploader("📤 Tải file JSON", type=["json"])
     export_filename = st.text_input("💾 Tên file xuất (.json)", value="updated_labeled.json")
     export_trigger = st.button("📥 Tải xuống file kết quả")
 
-    search_id = st.text_input("🔎 Tìm theo ID (chỉ nhập số)", "")
-    search_button = st.button("🚀 Tìm mẫu theo ID")
-
-# 🧠 Data processing nếu file được upload
+# 🧠 Data processing
 if uploaded_file:
     data = json.load(uploaded_file)
     st.session_state["data_loaded"] = True
@@ -48,7 +44,7 @@ if uploaded_file:
         example["num_agree"] = num_agree
         example["model_votes"] = model_votes
 
-    # Tabs logic
+    # Tabs
     tab_groups = {
         "🧠 Auto-assigned": [ex for ex in data if ex["override_type"] == "auto"],
         "✍️ Manually assigned": [
@@ -76,17 +72,34 @@ if uploaded_file:
             if index_key not in st.session_state:
                 st.session_state[index_key] = 0
 
-            # 👉 Tìm kiếm chỉ trong tab hiện tại
-            if search_button and search_id:
-                found = False
-                for idx, ex in enumerate(subset):
-                    if ex["clean_id"] == search_id:
-                        st.session_state[index_key] = idx
-                        st.success(f"🔍 Tìm thấy ID `{search_id}` trong tab này (vị trí {idx+1}/{len(subset)})!")
-                        found = True
-                        break
-                if not found:
-                    st.warning(f"⚠️ Không tìm thấy ID `{search_id}` trong tab hiện tại.")
+            # === Tìm kiếm trong tab hiện tại ===
+            col1, col2, col3 = st.columns([4, 3, 3])
+
+            with col1:
+                search_id = st.text_input(f"🔎 Tìm theo ID (chỉ số)", key=f"{tab_name}_search_id")
+            with col2:
+                goto_page = st.number_input("🔢 Đi đến vị trí", min_value=1, step=1,
+                                            max_value=len(subset), key=f"{tab_name}_goto_index")
+            with col3:
+                if st.button("🚀 Tìm / Chuyển trang", key=f"{tab_name}_search_btn"):
+                    found = False
+                    # Ưu tiên tìm theo ID nếu có
+                    if search_id:
+                        for idx, ex in enumerate(subset):
+                            if ex["clean_id"] == search_id:
+                                st.session_state[index_key] = idx
+                                st.success(f"🔍 Tìm thấy ID `{search_id}` ở vị trí {idx+1}/{len(subset)}")
+                                found = True
+                                break
+                        if not found:
+                            st.warning(f"⚠️ Không tìm thấy ID `{search_id}` trong tab này.")
+                    elif goto_page:
+                        idx = int(goto_page) - 1
+                        if 0 <= idx < len(subset):
+                            st.session_state[index_key] = idx
+                            st.info(f"📍 Đã chuyển đến vị trí {idx+1}/{len(subset)}")
+                        else:
+                            st.warning("⚠️ Vị trí không hợp lệ.")
 
             if len(subset) == 0:
                 st.info("Không có mẫu nào trong tab này.")
@@ -101,9 +114,9 @@ if uploaded_file:
                 if st.button("▶️", key=f"{tab_name}_next"):
                     st.session_state[index_key] = min(len(subset) - 1, st.session_state[index_key] + 1)
 
-            st.session_state[index_key] = max(0, min(st.session_state[index_key], len(subset) - 1))
-            example = subset[st.session_state[index_key]]
+            # Hiển thị mẫu hiện tại
             current_index = st.session_state[index_key]
+            example = subset[current_index]
 
             with main_col:
                 st.markdown("---")
@@ -144,7 +157,7 @@ if uploaded_file:
                 col2.markdown(f"**🤖 Auto-assigned:** `{auto_label or 'None'}`")
                 col3.markdown(f"**👤 Final label:** `{current_label}`{final_note}")
 
-    # Export
+    # Export file
     if export_trigger:
         for example in data:
             cid = example["clean_id"]
