@@ -1,33 +1,18 @@
 import streamlit as st
 import json
 from collections import Counter
-import streamlit.components.v1 as components
 
 st.set_page_config(layout="wide")
 st.title("🔍 Multihop NLI Label Review App")
 
-uploaded_file = st.sidebar.file_uploader("📤 Upload labeled JSON file", type=["json"])
-
-# Inject JavaScript to listen to arrow key events (left/right)
-components.html("""
-<script>
-document.addEventListener("keydown", function(e) {
-    if (e.key === "ArrowRight") {
-        window.parent.postMessage({ isStreamlitMessage: true, type: "streamlit:setComponentValue", key: "quick_key", value: "next" }, "*");
-    }
-    if (e.key === "ArrowLeft") {
-        window.parent.postMessage({ isStreamlitMessage: true, type: "streamlit:setComponentValue", key: "quick_key", value: "prev" }, "*");
-    }
-});
-</script>
-""", height=0)
+uploaded_file = st.file_uploader("📤 Upload labeled JSON file", type=["json"])
 
 if uploaded_file:
     data = json.load(uploaded_file)
     st.success(f"Loaded {len(data)} examples.")
 
+    # Gán nhãn auto/manual
     edited_examples = {}
-
     for example in data:
         validated_labels = {k: v for k, v in example.items() if k.endswith("_validated")}
         label_counts = Counter(validated_labels.values())
@@ -45,8 +30,11 @@ if uploaded_file:
                 example["label"] = auto_label
                 example["override_type"] = "auto"
             else:
+                auto_label = None
+                num_agree = vote_count
                 example["override_type"] = "manual"
         else:
+            auto_label = None
             example["override_type"] = "manual"
 
         if "original_label" not in example:
@@ -58,10 +46,7 @@ if uploaded_file:
 
     tab_groups = {
         "🧠 Auto-assigned": [ex for ex in data if ex["override_type"] == "auto"],
-        "✍️ Manually assigned": [
-            ex for ex in data if ex["override_type"] == "manual"
-            and ex["auto_label"] is not None and ex["label"] != ex["auto_label"]
-        ],
+        "✍️ Manually assigned": [ex for ex in data if ex["override_type"] == "manual" and ex["auto_label"] is not None and ex["label"] != ex["auto_label"]],
         "✅ 3/3 models agree": [ex for ex in data if ex["num_agree"] == 3],
         "⚠️ 2/3 models agree": [ex for ex in data if ex["num_agree"] == 2],
         "❌ 1/3 or all different": [ex for ex in data if ex["num_agree"] <= 1],
@@ -71,42 +56,67 @@ if uploaded_file:
         "🟦 implicature": [ex for ex in data if ex["label"] == "implicature"],
     }
 
-    tab_selection = st.sidebar.selectbox("🔎 Lọc theo nhóm nhãn", list(tab_groups.keys()))
-    filtered_data = tab_groups[tab_selection]
+    tabs = st.tabs(list(tab_groups.keys()))
 
-    mode = st.sidebar.radio("🛠️ Chế độ hiển thị", ["📄 Phân trang", "⚡ Quick review"])
+    # Script để bắt phím A/D
+    st.markdown("""
+    <script>
+    document.addEventListener("keydown", function(event) {
+        if (event.key === "a" || event.key === "A") {
+            window.parent.postMessage({type: 'streamlit:setComponentValue', value: 'prev'}, "*");
+        } else if (event.key === "d" || event.key === "D") {
+            window.parent.postMessage({type: 'streamlit:setComponentValue', value: 'next'}, "*");
+        }
+    });
+    </script>
+    """, unsafe_allow_html=True)
 
-    if mode == "📄 Phân trang":
-        page_size = 10
-        total = len(filtered_data)
-        total_pages = (total - 1) // page_size + 1
-        current_page = st.sidebar.number_input("📄 Page", min_value=1, max_value=total_pages, step=1)
+    # Hack JS -> Python using components
+    from streamlit.components.v1 import declare_component
+    nav_control = declare_component("nav_control", url="")
 
-        start = (current_page - 1) * page_size
-        end = min(start + page_size, total)
-        st.markdown(f"### 📊 Hiển thị mẫu {start + 1}–{end} / {total}")
+    for i, (tab_name, subset) in enumerate(tab_groups.items()):
+        with tabs[i]:
+            if len(subset) == 0:
+                st.info("Không có mẫu nào trong tab này.")
+                continue
 
-        for example in filtered_data[start:end]:
-            st.markdown("---")
-            example_id = example["id"]
-            premises = example["premises"]
-            hypothesis = example["hypothesis"]
-            original_label = example["original_label"]
-            auto_label = example["auto_label"]
-            model_votes = example["model_votes"]
-            current_label = edited_examples.get(example_id, example["label"])
+            session_key = f"index_{tab_name}"
+            if session_key not in st.session_state:
+                st.session_state[session_key] = 0
+
+            # Nhận event từ JS
+            action = nav_control(key=f"{tab_name}_nav")
+
+            if action == "prev":
+                st.session_state[session_key] = max(0, st.session_state[session_key] - 1)
+            elif action == "next":
+                st.session_state[session_key] = min(len(subset) - 1, st.session_state[session_key] + 1)
+
+            current_index = st.session_state[session_key]
+            current_example = subset[current_index]
+
+            st.markdown(f"### 📊 Tổng số mẫu: `{len(subset)}` — Đang xem mẫu `{current_index + 1}`")
+
+            example_id = current_example["id"]
+            premises = current_example["premises"]
+            hypothesis = current_example["hypothesis"]
+            original_label = current_example["original_label"]
+            auto_label = current_example["auto_label"]
+            model_votes = current_example["model_votes"]
+            current_label = edited_examples.get(example_id, current_example["label"])
 
             st.markdown(f"**🧾 ID:** `{example_id}`")
             for j, p in enumerate(premises):
                 st.markdown(f"**Premise {j+1}:** {p}")
             st.markdown(f"**🔮 Hypothesis:** {hypothesis}")
 
-            st.markdown("**🧠 Model votes:**")
+            st.markdown("#### 🧠 Model votes:")
             for model, vote in model_votes.items():
                 st.markdown(f"- `{model}` → **{vote}**")
 
-            with st.expander("✏️ Chỉnh nhãn"):
-                key = f"edit_{example_id}"
+            with st.expander("✏️ Chỉnh nhãn thủ công (nếu cần)"):
+                key = f"{tab_name}_{example_id}_override"
                 override = st.selectbox(
                     "Chọn nhãn mới:",
                     ["", "entailment", "contradiction", "neutral", "implicature"],
@@ -124,89 +134,24 @@ if uploaded_file:
                 final_note = " (overridden manually)"
 
             col1, col2, col3 = st.columns(3)
-            col1.markdown(f"**🔖 Original:** `{original_label}`")
-            col2.markdown(f"**🤖 Auto:** `{auto_label or 'None'}`")
-            col3.markdown(f"**👤 Final:** `{current_label}`{final_note}")
+            col1.markdown(f"**🔖 Original label:** `{original_label}`")
+            col2.markdown(f"**🤖 Auto-assigned:** `{auto_label if auto_label else 'None'}`")
+            col3.markdown(f"**👤 Final label:** `{current_label}`{final_note}")
 
-    elif mode == "⚡ Quick review":
-        total = len(filtered_data)
-        if "quick_index" not in st.session_state:
-            st.session_state.quick_index = 0
+    # Export
+    st.markdown("## 💾 Export kết quả")
+    filename = st.text_input("Tên file xuất (.json)", value="updated_labeled.json")
 
-        if "quick_key" in st.session_state:
-            if st.session_state.quick_key == "prev" and st.session_state.quick_index > 0:
-                st.session_state.quick_index -= 1
-            if st.session_state.quick_key == "next" and st.session_state.quick_index < total - 1:
-                st.session_state.quick_index += 1
-            del st.session_state.quick_key
-
-        col_prev, col_jump, col_next = st.columns([1, 4, 1])
-        with col_prev:
-            if st.button("⏪ Prev") and st.session_state.quick_index > 0:
-                st.session_state.quick_index -= 1
-        with col_jump:
-            st.number_input("🔢 Jump to index", 0, total - 1, key="quick_index", step=1)
-        with col_next:
-            if st.button("⏩ Next") and st.session_state.quick_index < total - 1:
-                st.session_state.quick_index += 1
-
-        example = filtered_data[st.session_state.quick_index]
-        example_id = example["id"]
-        premises = example["premises"]
-        hypothesis = example["hypothesis"]
-        original_label = example["original_label"]
-        auto_label = example["auto_label"]
-        model_votes = example["model_votes"]
-        current_label = edited_examples.get(example_id, example["label"])
-
-        st.markdown("---")
-        st.markdown(f"**🧾 ID:** `{example_id}`")
-        for j, p in enumerate(premises):
-            st.markdown(f"**Premise {j+1}:** {p}")
-        st.markdown(f"**🔮 Hypothesis:** {hypothesis}")
-
-        st.markdown("**🧠 Model votes:**")
-        for model, vote in model_votes.items():
-            st.markdown(f"- `{model}` → **{vote}**")
-
-        with st.expander("✏️ Chỉnh nhãn"):
-            key = f"quick_edit_{example_id}"
-            override = st.selectbox(
-                "Chọn nhãn mới:",
-                ["", "entailment", "contradiction", "neutral", "implicature"],
-                key=key,
-            )
-            if override:
-                current_label = override
-                edited_examples[example_id] = override
-
-        if auto_label is None:
-            final_note = " (no auto-assigned label)"
-        elif current_label == auto_label:
-            final_note = " (auto-assigned)"
-        else:
-            final_note = " (overridden manually)"
-
-        col1, col2, col3 = st.columns(3)
-        col1.markdown(f"**🔖 Original:** `{original_label}`")
-        col2.markdown(f"**🤖 Auto:** `{auto_label or 'None'}`")
-        col3.markdown(f"**👤 Final:** `{current_label}`{final_note}")
-
-    st.sidebar.markdown("## 💾 Export kết quả")
-    filename = st.sidebar.text_input("Tên file xuất (.json)", value="updated_labeled.json")
-
-    if st.sidebar.button("📥 Tải về JSON"):
+    if st.button("💾 Tải về JSON"):
         for example in data:
             example_id = example["id"]
             if example_id in edited_examples:
                 example["label"] = edited_examples[example_id]
-                example["override_type"] = (
-                    "manual" if example["label"] != example["auto_label"] else "auto"
-                )
+                example["override_type"] = ("manual" if example["label"] != example["auto_label"] else "auto")
 
         json_str = json.dumps(data, ensure_ascii=False, indent=2)
-        st.sidebar.download_button(
-            label="💾 Click để tải JSON",
+        st.download_button(
+            label="📥 Click để tải JSON",
             file_name=filename,
             mime="application/json",
             data=json_str.encode("utf-8"),
