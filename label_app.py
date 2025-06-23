@@ -74,49 +74,42 @@ if uploaded_file:
     tabs = st.tabs(list(tab_groups.keys()))
 
     for i, (tab_name, subset) in enumerate(tab_groups.items()):
-        with tabs[i]:
-            st.markdown(f"### 📊 Số lượng mẫu: {len(subset)}")
+    with tabs[i]:
+        st.markdown(f"### 📊 Số lượng mẫu: {len(subset)}")
 
-            index_key = f"{tab_name}_index"
-            if index_key not in st.session_state:
-                st.session_state[index_key] = 0
+        index_key = f"{tab_name}_index"
+        if index_key not in st.session_state:
+            st.session_state[index_key] = 0
 
-            if len(subset) == 0:
-                st.info("Không có mẫu nào trong tab này.")
-                continue
+        if len(subset) == 0:
+            st.info("Không có mẫu nào trong tab này.")
+            continue
 
-            # Tìm theo clean_id
-            with st.expander("🔎 Tìm mẫu theo ID (số sau dấu `_`)"):
-                search_clean_id = st.text_input("Nhập ID", key=f"{tab_name}_search")
-                if search_clean_id:
-                    found_idx = next((i for i, ex in enumerate(subset) if ex.get("clean_id") == search_clean_id), None)
-                    if found_idx is not None:
-                        st.success(f"✅ Tìm thấy mẫu ở vị trí {found_idx + 1}")
-                        st.session_state[index_key] = found_idx
-                    else:
-                        st.warning("❌ Không tìm thấy ID trong tab này.")
+        # Navigation bằng < và >
+        nav_left, main_col, nav_right = st.columns([1, 10, 1])
+        with nav_left:
+            if st.button("◀️", key=f"{tab_name}_prev"):
+                st.session_state[index_key] = max(0, st.session_state[index_key] - 1)
+        with nav_right:
+            if st.button("▶️", key=f"{tab_name}_next"):
+                st.session_state[index_key] = min(len(subset) - 1, st.session_state[index_key] + 1)
 
-            # Điều hướng mẫu
-            colA, colB, colC = st.columns([1, 2, 1])
-            with colA:
-                if st.button("⬅️ Trước", key=f"{tab_name}_prev"):
-                    st.session_state[index_key] = max(0, st.session_state[index_key] - 1)
-            with colC:
-                if st.button("Tiếp ➡️", key=f"{tab_name}_next"):
-                    st.session_state[index_key] = min(len(subset) - 1, st.session_state[index_key] + 1)
-            with colB:
-                go_to_page = st.number_input("📄 Đi tới trang", min_value=1, max_value=len(subset),
-                                             key=f"{tab_name}_goto", step=1)
-                if st.button("🔄 Chuyển", key=f"{tab_name}_goto_btn"):
-                    st.session_state[index_key] = go_to_page - 1
+        # Giới hạn index
+        st.session_state[index_key] = max(0, min(st.session_state[index_key], len(subset) - 1))
+        example = subset[st.session_state[index_key]]
+        current_index = st.session_state[index_key]
 
-            # Render example
-            st.session_state[index_key] = max(0, min(st.session_state[index_key], len(subset) - 1))
-            example = subset[st.session_state[index_key]]
-            st.divider()
-            st.markdown(f"🧾 **ID:** `{example['id']}` → `{example['clean_id']}`")
+        with main_col:
+            st.markdown("---")
+            st.markdown(f"🧾 **ID:** `{example['id']}` → `{example['clean_id']}` ({current_index+1}/{len(subset)})")
+
             for j, p in enumerate(example.get("premises", [])):
-                st.markdown(f"**Premise {j+1}:** {p}")
+                st.markdown(
+                    f"<div style='font-size: 0.85rem; margin-bottom: 6px;'>"
+                    f"<b>Premise {j+1}:</b> {p}</div>",
+                    unsafe_allow_html=True
+                )
+
             st.markdown(f"**🔮 Hypothesis:** {example.get('hypothesis', '')}")
 
             st.markdown("#### 🧠 Model votes:")
@@ -124,18 +117,25 @@ if uploaded_file:
                 st.markdown(f"- `{model}` → **{vote}**")
 
             with st.expander("✏️ Chỉnh nhãn thủ công"):
-                override = st.selectbox("Chọn nhãn mới:",
-                                        ["", "entailment", "contradiction", "neutral", "implicature"],
-                                        key=f"{tab_name}_{example['clean_id']}_override")
+                override = st.selectbox(
+                    "Chọn nhãn mới:",
+                    ["", "entailment", "contradiction", "neutral", "implicature"],
+                    key=f"{tab_name}_{example['clean_id']}_override"
+                )
                 if override:
                     edited_examples[example["clean_id"]] = override
 
-            final_note = " (no auto-assigned)" if example["auto_label"] is None \
-                else " (auto-assigned)" if example["label"] == example["auto_label"] \
+            auto_label = example.get("auto_label")
+            current_label = edited_examples.get(example["clean_id"], example["label"])
+            final_note = (
+                " (no auto-assigned)" if auto_label is None
+                else " (auto-assigned)" if current_label == auto_label
                 else " (overridden manually)"
+            )
+
             col1, col2, col3 = st.columns(3)
-            col1.markdown(f"**🔖 Original label:** `{example['original_label']}`")
-            col2.markdown(f"**🤖 Auto-assigned:** `{example['auto_label'] or 'None'}`")
-            col3.markdown(f"**👤 Final label:** `{edited_examples.get(example['clean_id'], example['label'])}`{final_note}")
+            col1.markdown(f"**🔖 Original label:** `{example.get('original_label', 'N/A')}`")
+            col2.markdown(f"**🤖 Auto-assigned:** `{auto_label or 'None'}`")
+            col3.markdown(f"**👤 Final label:** `{current_label}`{final_note}")
 else:
     st.info("📥 Vui lòng tải file JSON từ sidebar để bắt đầu.")
