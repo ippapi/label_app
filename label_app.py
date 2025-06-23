@@ -64,38 +64,29 @@ if uploaded_file:
         "🟦 implicature": [ex for ex in data if ex["label"] == "implicature"],
     }
 
-    # Mapping clean_id → (tab_name, index)
-    id_to_tab_index = {}
-    for tab_name, subset in tab_groups.items():
-        for i, ex in enumerate(subset):
-            id_to_tab_index[ex["clean_id"]] = (tab_name, i)
-
-    # Handle search
-    if search_button and search_id:
-        if search_id in id_to_tab_index:
-            found_tab, found_index = id_to_tab_index[search_id]
-            st.session_state["active_tab"] = found_tab
-            st.session_state[f"{found_tab}_index"] = found_index
-            st.success(f"🔍 Tìm thấy ID `{search_id}` ở tab `{found_tab}`!")
-        else:
-            st.warning(f"⚠️ Không tìm thấy ID `{search_id}` trong dữ liệu.")
-
-    # Tabs rendering (compatible version)
     tab_names = list(tab_groups.keys())
-    active_tab = st.session_state.get("active_tab", tab_names[0])
     tabs = st.tabs(tab_names)
 
     for i, tab_name in enumerate(tab_names):
         subset = tab_groups[tab_name]
         with tabs[i]:
-            if tab_name != active_tab:
-                continue  # Skip other tabs
-
             st.markdown(f"### 📊 Số lượng mẫu: {len(subset)}")
 
             index_key = f"{tab_name}_index"
             if index_key not in st.session_state:
                 st.session_state[index_key] = 0
+
+            # 👉 Tìm kiếm chỉ trong tab hiện tại
+            if search_button and search_id:
+                found = False
+                for idx, ex in enumerate(subset):
+                    if ex["clean_id"] == search_id:
+                        st.session_state[index_key] = idx
+                        st.success(f"🔍 Tìm thấy ID `{search_id}` trong tab này (vị trí {idx+1}/{len(subset)})!")
+                        found = True
+                        break
+                if not found:
+                    st.warning(f"⚠️ Không tìm thấy ID `{search_id}` trong tab hiện tại.")
 
             if len(subset) == 0:
                 st.info("Không có mẫu nào trong tab này.")
