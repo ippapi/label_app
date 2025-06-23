@@ -5,29 +5,6 @@ from collections import Counter
 st.set_page_config(layout="wide")
 st.title("🔍 Multihop NLI Label Review App")
 
-# JavaScript để hỗ trợ phím A/D
-st.markdown("""
-<script>
-console.log("📦 Key listener script loaded");  // kiểm tra script có được nạp không
-
-document.addEventListener('keydown', function(e) {
-  console.log("🔑 Key pressed:", e.key);  // log phím nhấn
-
-  if(e.key === 'a' || e.key === 'A'){
-    console.log("⬅️ A key detected → clicking Prev");
-    let buttons = document.querySelectorAll('button[kind="secondary"]');
-    if(buttons.length > 0){ buttons[0].click(); }
-  }
-  if(e.key === 'd' || e.key === 'D'){
-    console.log("➡️ D key detected → clicking Next");
-    let buttons = document.querySelectorAll('button[kind="secondary"]');
-    if(buttons.length > 1){ buttons[1].click(); }
-  }
-});
-</script>
-""", unsafe_allow_html=True)
-
-
 uploaded_file = st.file_uploader("📤 Upload labeled JSON file", type=["json"])
 
 if uploaded_file:
@@ -110,7 +87,7 @@ if uploaded_file:
         with tabs[i]:
             st.markdown(f"### 📊 Số lượng mẫu: `{len(subset)}`")
 
-            # Quick review index
+            # Session state cho index hiện tại
             index_key = f"{tab_name}_index"
             if index_key not in st.session_state:
                 st.session_state[index_key] = 0
@@ -119,24 +96,45 @@ if uploaded_file:
                 st.info("Không có mẫu nào trong tab này.")
                 continue
 
+            # ⌨️ Key control qua input (A/D)
+            key_input = st.text_input("⎆ Nhập A hoặc D để chuyển mẫu", key=f"{tab_name}_key_input")
+            if key_input.lower() == "a":
+                st.session_state[index_key] = max(0, st.session_state[index_key] - 1)
+                st.experimental_rerun()
+            elif key_input.lower() == "d":
+                st.session_state[index_key] = min(len(subset) - 1, st.session_state[index_key] + 1)
+                st.experimental_rerun()
+
+            # Tìm kiếm theo ID
+            with st.expander("🔎 Tìm theo ID"):
+                search_id = st.text_input("Nhập ID để tìm mẫu:", key=f"{tab_name}_search")
+                if search_id:
+                    index_found = next((idx for idx, ex in enumerate(subset) if ex["id"] == search_id), None)
+                    if index_found is not None:
+                        st.success(f"🔍 Tìm thấy mẫu ở vị trí {index_found+1}")
+                        st.session_state[index_key] = index_found
+                        st.experimental_rerun()
+                    else:
+                        st.warning("❗ Không tìm thấy ID trong tab này.")
+
             st.session_state[index_key] = max(0, min(
                 st.session_state[index_key], len(subset) - 1))
 
-            # Navigation buttons
+            # Nút điều hướng
             colA, colB, colC = st.columns([1, 2, 1])
             with colA:
                 if st.button("⬅️ Prev", key=f"{tab_name}_prev"):
-                    st.session_state[index_key] -= 1
+                    st.session_state[index_key] = max(0, st.session_state[index_key] - 1)
             with colC:
                 if st.button("Next ➡️", key=f"{tab_name}_next"):
-                    st.session_state[index_key] += 1
+                    st.session_state[index_key] = min(len(subset) - 1, st.session_state[index_key] + 1)
 
+            # Hiển thị example
             example = subset[st.session_state[index_key]]
             current_index = st.session_state[index_key]
 
             st.markdown("---")
-            st.markdown(
-                f"🧾 **ID:** `{example['id']}` ({current_index+1}/{len(subset)})")
+            st.markdown(f"🧾 **ID:** `{example['id']}` ({current_index+1}/{len(subset)})")
             for j, p in enumerate(example["premises"]):
                 st.markdown(f"**Premise {j+1}:** {p}")
             st.markdown(f"**🔮 Hypothesis:** {example['hypothesis']}")
@@ -157,14 +155,11 @@ if uploaded_file:
 
             auto_label = example["auto_label"]
             current_label = edited_examples.get(example["id"], example["label"])
-            if auto_label is None:
-                final_note = " (no auto-assigned label)"
-            elif current_label == auto_label:
-                final_note = " (auto-assigned)"
-            else:
-                final_note = " (overridden manually)"
+            final_note = (
+                " (no auto-assigned label)" if auto_label is None
+                else " (auto-assigned)" if current_label == auto_label
+                else " (overridden manually)"
+            )
 
             col1, col2, col3 = st.columns(3)
             col1.markdown(f"**🔖 Original label:** `{example['original_label']}`")
-            col2.markdown(f"**🤖 Auto-assigned:** `{auto_label if auto_label else 'None'}`")
-            col3.markdown(f"**👤 Final label:** `{current_label}`{final_note}")
