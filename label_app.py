@@ -8,18 +8,25 @@ st.title("🔍 Multihop NLI Label Review App")
 # JavaScript để hỗ trợ phím A/D
 st.markdown("""
 <script>
+console.log("📦 Key listener script loaded");  // kiểm tra script có được nạp không
+
 document.addEventListener('keydown', function(e) {
+  console.log("🔑 Key pressed:", e.key);  // log phím nhấn
+
   if(e.key === 'a' || e.key === 'A'){
+    console.log("⬅️ A key detected → clicking Prev");
     let buttons = document.querySelectorAll('button[kind="secondary"]');
     if(buttons.length > 0){ buttons[0].click(); }
   }
   if(e.key === 'd' || e.key === 'D'){
+    console.log("➡️ D key detected → clicking Next");
     let buttons = document.querySelectorAll('button[kind="secondary"]');
     if(buttons.length > 1){ buttons[1].click(); }
   }
 });
 </script>
 """, unsafe_allow_html=True)
+
 
 uploaded_file = st.file_uploader("📤 Upload labeled JSON file", type=["json"])
 
