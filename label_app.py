@@ -1,11 +1,26 @@
 import streamlit as st
 import json
 from collections import Counter
+import streamlit.components.v1 as components
 
 st.set_page_config(layout="wide")
 st.title("🔍 Multihop NLI Label Review App")
 
 uploaded_file = st.sidebar.file_uploader("📤 Upload labeled JSON file", type=["json"])
+
+# Inject JavaScript to listen to keypress events
+components.html("""
+<script>
+document.addEventListener("keydown", function(e) {
+    if (e.key === "d" || e.key === "D") {
+        window.parent.postMessage({ type: "streamlit:setComponentValue", key: "quick_next" }, "*");
+    }
+    if (e.key === "s" || e.key === "S") {
+        window.parent.postMessage({ type: "streamlit:setComponentValue", key: "quick_prev" }, "*");
+    }
+});
+</script>
+""", height=0)
 
 if uploaded_file:
     data = json.load(uploaded_file)
@@ -100,6 +115,14 @@ if uploaded_file:
         total = len(filtered_data)
         if "quick_index" not in st.session_state:
             st.session_state.quick_index = 0
+
+        key_event = st.experimental_get_query_params()
+        if "quick_prev" in key_event:
+            if st.session_state.quick_index > 0:
+                st.session_state.quick_index -= 1
+        if "quick_next" in key_event:
+            if st.session_state.quick_index < total - 1:
+                st.session_state.quick_index += 1
 
         col_prev, col_jump, col_next = st.columns([1, 4, 1])
         with col_prev:
