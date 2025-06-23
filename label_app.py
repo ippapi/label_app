@@ -8,15 +8,15 @@ st.title("🔍 Multihop NLI Label Review App")
 
 uploaded_file = st.sidebar.file_uploader("📤 Upload labeled JSON file", type=["json"])
 
-# Inject JavaScript to listen to keypress events
+# Inject JavaScript to listen to keypress events and update Streamlit session state
 components.html("""
 <script>
 document.addEventListener("keydown", function(e) {
     if (e.key === "d" || e.key === "D") {
-        window.parent.postMessage({ type: "streamlit:setComponentValue", key: "quick_next" }, "*");
+        window.parent.postMessage({ isStreamlitMessage: true, type: "streamlit:setComponentValue", key: "quick_key", value: "next" }, "*");
     }
     if (e.key === "s" || e.key === "S") {
-        window.parent.postMessage({ type: "streamlit:setComponentValue", key: "quick_prev" }, "*");
+        window.parent.postMessage({ isStreamlitMessage: true, type: "streamlit:setComponentValue", key: "quick_key", value: "prev" }, "*");
     }
 });
 </script>
@@ -116,13 +116,13 @@ if uploaded_file:
         if "quick_index" not in st.session_state:
             st.session_state.quick_index = 0
 
-        key_event = st.experimental_get_query_params()
-        if "quick_prev" in key_event:
-            if st.session_state.quick_index > 0:
+        # Handle keypress events from JS
+        if "quick_key" in st.session_state:
+            if st.session_state.quick_key == "prev" and st.session_state.quick_index > 0:
                 st.session_state.quick_index -= 1
-        if "quick_next" in key_event:
-            if st.session_state.quick_index < total - 1:
+            if st.session_state.quick_key == "next" and st.session_state.quick_index < total - 1:
                 st.session_state.quick_index += 1
+            del st.session_state.quick_key
 
         col_prev, col_jump, col_next = st.columns([1, 4, 1])
         with col_prev:
