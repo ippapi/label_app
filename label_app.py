@@ -13,20 +13,15 @@ if uploaded_file:
     st.success(f"Loaded {len(data)} examples.")
     edited_examples = {}
 
-    # Chuẩn hóa ID: lấy số sau dấu _ cuối cùng làm ID tìm kiếm
+    # Chuẩn hóa clean_id (số cuối)
     for example in data:
-        try:
-            raw_id = example.get("id", "")
-            match = re.search(r'_(\d+)$', raw_id)
-            clean_id = match.group(1) if match else raw_id
-            example["clean_id"] = clean_id
-        except Exception as e:
-            example["clean_id"] = "unknown"
+        raw_id = example.get("id", "")
+        match = re.search(r'_(\d+)$', raw_id)
+        clean_id = match.group(1) if match else raw_id
+        example["clean_id"] = clean_id
 
-        # Auto/manual labeling
-        validated_labels = {
-            k: v for k, v in example.items() if k.endswith("_validated")
-        }
+        # Label logic
+        validated_labels = {k: v for k, v in example.items() if k.endswith("_validated")}
         label_counts = Counter(validated_labels.values())
         model_votes = {k.split("/")[-2]: v for k, v in validated_labels.items()}
 
@@ -60,20 +55,15 @@ if uploaded_file:
 
         if st.button("💾 Tải về JSON"):
             for example in data:
-                example_id = example["clean_id"]
-                if example_id in edited_examples:
-                    example["label"] = edited_examples[example_id]
+                cid = example["clean_id"]
+                if cid in edited_examples:
+                    example["label"] = edited_examples[cid]
                     example["override_type"] = (
                         "manual" if example["label"] != example["auto_label"] else "auto"
                     )
-
             json_str = json.dumps(data, ensure_ascii=False, indent=2)
-            st.download_button(
-                label="📥 Click để tải JSON",
-                file_name=filename,
-                mime="application/json",
-                data=json_str.encode("utf-8"),
-            )
+            st.download_button("📥 Click để tải JSON", data=json_str.encode("utf-8"),
+                               file_name=filename, mime="application/json")
 
     # Tabs
     tab_groups = {
@@ -105,28 +95,27 @@ if uploaded_file:
                 st.info("Không có mẫu nào trong tab này.")
                 continue
 
-            # 🔍 Search by ID
-            with st.expander("🔎 Tìm theo ID (cuối chuỗi `_1234`)"):
-                search_id = st.text_input("Nhập ID (số):", key=f"{tab_name}_search")
-                if search_id:
-                    index_found = next((idx for idx, ex in enumerate(subset) if ex["clean_id"] == search_id), None)
-                    if index_found is not None:
-                        st.success(f"🔍 Tìm thấy mẫu ở vị trí {index_found+1}")
-                        st.session_state[index_key] = index_found
-                        st.experimental_rerun()
+            # Tìm theo clean_id (chỉ số)
+            with st.expander("🔎 Tìm theo ID (chỉ nhập số sau dấu `_`)"):
+                search_clean_id = st.text_input("Nhập ID (ví dụ: 1739):", key=f"{tab_name}_search")
+                if search_clean_id:
+                    found_idx = next(
+                        (i for i, ex in enumerate(subset) if ex.get("clean_id") == search_clean_id),
+                        None
+                    )
+                    if found_idx is not None:
+                        st.success(f"🔍 Tìm thấy mẫu ở vị trí {found_idx+1}")
+                        st.session_state[index_key] = found_idx
                     else:
-                        st.warning("❗ Không tìm thấy ID trong tab này.")
+                        st.warning("❗ Không tìm thấy ID này trong tab hiện tại.")
 
-            # ⌨️ Phím A/D input
+            # A/D control
             key_input = st.text_input("⎆ Nhập A hoặc D để chuyển mẫu", key=f"{tab_name}_key")
             if key_input.lower() == "a":
                 st.session_state[index_key] = max(0, st.session_state[index_key] - 1)
-                st.experimental_rerun()
             elif key_input.lower() == "d":
                 st.session_state[index_key] = min(len(subset) - 1, st.session_state[index_key] + 1)
-                st.experimental_rerun()
 
-            # Giới hạn index
             st.session_state[index_key] = max(0, min(st.session_state[index_key], len(subset) - 1))
 
             # Navigation
