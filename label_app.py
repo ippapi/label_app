@@ -8,14 +8,14 @@ st.title("🔍 Multihop NLI Label Review App")
 
 uploaded_file = st.sidebar.file_uploader("📤 Upload labeled JSON file", type=["json"])
 
-# Inject JavaScript to listen to keypress events and update Streamlit session state
+# Inject JavaScript to listen to arrow key events (left/right)
 components.html("""
 <script>
 document.addEventListener("keydown", function(e) {
-    if (e.key === "d" || e.key === "D") {
+    if (e.key === "ArrowRight") {
         window.parent.postMessage({ isStreamlitMessage: true, type: "streamlit:setComponentValue", key: "quick_key", value: "next" }, "*");
     }
-    if (e.key === "s" || e.key === "S") {
+    if (e.key === "ArrowLeft") {
         window.parent.postMessage({ isStreamlitMessage: true, type: "streamlit:setComponentValue", key: "quick_key", value: "prev" }, "*");
     }
 });
@@ -56,8 +56,25 @@ if uploaded_file:
         example["num_agree"] = num_agree
         example["model_votes"] = model_votes
 
+    tab_groups = {
+        "🧠 Auto-assigned": [ex for ex in data if ex["override_type"] == "auto"],
+        "✍️ Manually assigned": [
+            ex for ex in data if ex["override_type"] == "manual"
+            and ex["auto_label"] is not None and ex["label"] != ex["auto_label"]
+        ],
+        "✅ 3/3 models agree": [ex for ex in data if ex["num_agree"] == 3],
+        "⚠️ 2/3 models agree": [ex for ex in data if ex["num_agree"] == 2],
+        "❌ 1/3 or all different": [ex for ex in data if ex["num_agree"] <= 1],
+        "🟩 entailment": [ex for ex in data if ex["label"] == "entailment"],
+        "🟥 contradiction": [ex for ex in data if ex["label"] == "contradiction"],
+        "🟨 neutral": [ex for ex in data if ex["label"] == "neutral"],
+        "🟦 implicature": [ex for ex in data if ex["label"] == "implicature"],
+    }
+
+    tab_selection = st.sidebar.selectbox("🔎 Lọc theo nhóm nhãn", list(tab_groups.keys()))
+    filtered_data = tab_groups[tab_selection]
+
     mode = st.sidebar.radio("🛠️ Chế độ hiển thị", ["📄 Phân trang", "⚡ Quick review"])
-    filtered_data = data
 
     if mode == "📄 Phân trang":
         page_size = 10
@@ -174,70 +191,6 @@ if uploaded_file:
         col1.markdown(f"**🔖 Original:** `{original_label}`")
         col2.markdown(f"**🤖 Auto:** `{auto_label or 'None'}`")
         col3.markdown(f"**👤 Final:** `{current_label}`{final_note}")
-
-    # Always show tab filter view at bottom
-    tab_groups = {
-        "🧠 Auto-assigned": [ex for ex in data if ex["override_type"] == "auto"],
-        "✍️ Manually assigned": [
-            ex for ex in data if ex["override_type"] == "manual"
-            and ex["auto_label"] is not None and ex["label"] != ex["auto_label"]
-        ],
-        "✅ 3/3 models agree": [ex for ex in data if ex["num_agree"] == 3],
-        "⚠️ 2/3 models agree": [ex for ex in data if ex["num_agree"] == 2],
-        "❌ 1/3 or all different": [ex for ex in data if ex["num_agree"] <= 1],
-        "🟩 entailment": [ex for ex in data if ex["label"] == "entailment"],
-        "🟥 contradiction": [ex for ex in data if ex["label"] == "contradiction"],
-        "🟨 neutral": [ex for ex in data if ex["label"] == "neutral"],
-        "🟦 implicature": [ex for ex in data if ex["label"] == "implicature"],
-    }
-
-    st.markdown("---")
-    st.markdown("## 📂 Lọc theo nhóm nhãn")
-    tabs = st.tabs(list(tab_groups.keys()))
-    for i, (tab_name, subset) in enumerate(tab_groups.items()):
-        with tabs[i]:
-            st.markdown(f"### 📊 Số lượng mẫu: `{len(subset)}`")
-            for example in subset:
-                st.markdown("---")
-                example_id = example["id"]
-                premises = example["premises"]
-                hypothesis = example["hypothesis"]
-                original_label = example["original_label"]
-                auto_label = example["auto_label"]
-                model_votes = example["model_votes"]
-                current_label = edited_examples.get(example_id, example["label"])
-
-                st.markdown(f"**🧾 ID:** `{example_id}`")
-                for j, p in enumerate(premises):
-                    st.markdown(f"**Premise {j+1}:** {p}")
-                st.markdown(f"**🔮 Hypothesis:** {hypothesis}")
-
-                st.markdown("**🧠 Model votes:**")
-                for model, vote in model_votes.items():
-                    st.markdown(f"- `{model}` → **{vote}**")
-
-                with st.expander("✏️ Chỉnh nhãn"):
-                    key = f"tab_edit_{tab_name}_{example_id}"
-                    override = st.selectbox(
-                        "Chọn nhãn mới:",
-                        ["", "entailment", "contradiction", "neutral", "implicature"],
-                        key=key,
-                    )
-                    if override:
-                        current_label = override
-                        edited_examples[example_id] = override
-
-                if auto_label is None:
-                    final_note = " (no auto-assigned label)"
-                elif current_label == auto_label:
-                    final_note = " (auto-assigned)"
-                else:
-                    final_note = " (overridden manually)"
-
-                col1, col2, col3 = st.columns(3)
-                col1.markdown(f"**🔖 Original:** `{original_label}`")
-                col2.markdown(f"**🤖 Auto:** `{auto_label or 'None'}`")
-                col3.markdown(f"**👤 Final:** `{current_label}`{final_note}")
 
     st.sidebar.markdown("## 💾 Export kết quả")
     filename = st.sidebar.text_input("Tên file xuất (.json)", value="updated_labeled.json")
