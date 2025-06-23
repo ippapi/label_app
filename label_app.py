@@ -95,7 +95,7 @@ if uploaded_file:
                 st.info("Không có mẫu nào trong tab này.")
                 continue
 
-            # Tìm theo clean_id (chỉ số)
+            # 🔎 Tìm theo clean_id
             with st.expander("🔎 Tìm theo ID (chỉ nhập số sau dấu `_`)"):
                 search_clean_id = st.text_input("Nhập ID (ví dụ: 1739):", key=f"{tab_name}_search")
                 if search_clean_id:
@@ -104,21 +104,19 @@ if uploaded_file:
                         None
                     )
                     if found_idx is not None:
-                        st.success(f"🔍 Tìm thấy mẫu ở vị trí {found_idx+1}")
+                        st.success(f"🔍 Tìm thấy mẫu ở trang {found_idx + 1}")
                         st.session_state[index_key] = found_idx
                     else:
                         st.warning("❗ Không tìm thấy ID này trong tab hiện tại.")
 
-            # A/D control
+            # ⎆ Di chuyển bằng phím a/d
             key_input = st.text_input("⎆ Nhập A hoặc D để chuyển mẫu", key=f"{tab_name}_key")
             if key_input.lower() == "a":
                 st.session_state[index_key] = max(0, st.session_state[index_key] - 1)
             elif key_input.lower() == "d":
                 st.session_state[index_key] = min(len(subset) - 1, st.session_state[index_key] + 1)
 
-            st.session_state[index_key] = max(0, min(st.session_state[index_key], len(subset) - 1))
-
-            # Navigation
+            # ⏩ Nhảy tới số trang
             colA, colB, colC = st.columns([1, 2, 1])
             with colA:
                 if st.button("⬅️ Prev", key=f"{tab_name}_prev"):
@@ -126,7 +124,16 @@ if uploaded_file:
             with colC:
                 if st.button("Next ➡️", key=f"{tab_name}_next"):
                     st.session_state[index_key] = min(len(subset) - 1, st.session_state[index_key] + 1)
+            with colB:
+                go_to_page = st.number_input(
+                    "Đi tới trang", min_value=1, max_value=len(subset), step=1,
+                    key=f"{tab_name}_goto_page"
+                )
+                if st.button("🔄 Chuyển", key=f"{tab_name}_goto_btn"):
+                    st.session_state[index_key] = go_to_page - 1
 
+            # Cập nhật vị trí
+            st.session_state[index_key] = max(0, min(st.session_state[index_key], len(subset) - 1))
             example = subset[st.session_state[index_key]]
             current_index = st.session_state[index_key]
 
