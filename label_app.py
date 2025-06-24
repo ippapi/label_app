@@ -1,4 +1,3 @@
-# multihop_nli_label_tool.py
 import streamlit as st
 import json
 import re
@@ -146,9 +145,17 @@ if uploaded_file:
                 col2.markdown(f"**🤖 Auto-assigned:** `{auto_label or 'None'}`")
                 col3.markdown(f"**👤 Final label:** `{current_label}`{final_note}")
 
+    # ✅ Export bao gồm cả premise, hypothesis, label
     with st.sidebar:
         for example in data:
             clean_id = example["clean_id"]
+
+            if clean_id in st.session_state["edited_premises"]:
+                example["premises"] = st.session_state["edited_premises"][clean_id]
+
+            if clean_id in st.session_state["edited_hypothesis"]:
+                example["hypothesis"] = st.session_state["edited_hypothesis"][clean_id]
+
             final = st.session_state["edited_label"].get(clean_id, example.get("auto_label") or example.get("label"))
             example["final_label"] = final
 
