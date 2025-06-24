@@ -3,58 +3,14 @@ import streamlit as st
 import json
 import re
 from collections import Counter
+import time
 
-def edit_text_with_history(label: str, key_prefix: str, original_text: str, height=80):
-    key = key_prefix
-    reset_key = key + "_reset"
-    undo_key = key + "_undo"
-    redo_key = key + "_redo"
-
-    st.session_state.setdefault("edit_history", {})
-    st.session_state["edit_history"].setdefault(key, {"history": [original_text], "index": 0})
-    hist = st.session_state["edit_history"][key]
-
-    for k in [reset_key, undo_key, redo_key]:
-        st.session_state.setdefault(k, False)
-
-    c1, c2, c3, c4, c5 = st.columns([6, 1, 1, 1, 1])
-    with c1:
-        st.markdown(f"**{label}**")
-    with c2:
-        if st.button("🔄", help="Reset", key=reset_key + "_btn"):
-            st.session_state[reset_key] = True
-    with c3:
-        if st.button("↩️", help="Undo", key=undo_key + "_btn"):
-            st.session_state[undo_key] = True
-    with c4:
-        if st.button("↪️", help="Redo", key=redo_key + "_btn"):
-            st.session_state[redo_key] = True
-
-    if st.session_state[reset_key]:
-        hist["history"].append(original_text)
-        hist["index"] = len(hist["history"]) - 1
-        st.session_state[reset_key] = False
-
-    if st.session_state[undo_key] and hist["index"] > 0:
-        hist["index"] -= 1
-        st.session_state[undo_key] = False
-
-    if st.session_state[redo_key] and hist["index"] < len(hist["history"]) - 1:
-        hist["index"] += 1
-        st.session_state[redo_key] = False
-
-    new_val = st.text_area(
-        "", value=hist["history"][hist["index"]],
-        key=key, height=height, label_visibility="collapsed"
-    )
-
-    if new_val != hist["history"][hist["index"]]:
-        hist["history"] = hist["history"][:hist["index"] + 1] + [new_val]
-        hist["index"] += 1
-
-    return hist["history"][hist["index"]]
+def edit_text_simple(label: str, key: str, original_text: str, height=80):
+    st.markdown(f"**{label}**")
+    return st.text_area("", value=original_text, key=key, height=height, label_visibility="collapsed")
 
 st.set_page_config(page_title="Multihop NLI Label Review", layout="wide", initial_sidebar_state="expanded")
+
 with st.sidebar:
     st.title("📂 File dữ liệu")
     uploaded_file = st.file_uploader("📤 Tải file JSON", type=["json"])
@@ -80,7 +36,6 @@ if uploaded_file:
         auto_label = most_common[0][0] if most_common and most_common[0][1] >= 2 else None
         num_agree = most_common[0][1] if most_common else 0
 
-        # ❗ Không thay đổi example["label"]
         example["label"] = example.get("label", "")
         example["override_type"] = "auto" if auto_label else "manual"
         example["original_label"] = example.get("original_label", example.get("label", "unknown"))
@@ -154,14 +109,14 @@ if uploaded_file:
 
                 updated_premises = []
                 for j, p in enumerate(example.get("premises", [])):
-                    field_key = f"{example['clean_id']}_premise_{j}"
-                    updated_val = edit_text_with_history(f"Premise {j+1}:", f"{tab_name}_{field_key}", p, height=80)
+                    field_key = f"{tab_name}_{example['clean_id']}_premise_{j}"
+                    updated_val = edit_text_simple(f"Premise {j+1}:", field_key, p, height=80)
                     updated_premises.append(updated_val)
                 st.session_state["edited_premises"][example["clean_id"]] = updated_premises
 
-                hyp_key = f"{example['clean_id']}_hypothesis"
+                hyp_key = f"{tab_name}_{example['clean_id']}_hypothesis"
                 original_hyp = example.get("hypothesis", "")
-                edited_hyp = edit_text_with_history("Hypothesis:", f"{tab_name}_{hyp_key}", original_hyp, height=100)
+                edited_hyp = edit_text_simple("Hypothesis:", hyp_key, original_hyp, height=100)
                 st.session_state["edited_hypothesis"][example["clean_id"]] = edited_hyp
 
                 st.markdown("#### 🧠 Model votes:")
@@ -191,7 +146,6 @@ if uploaded_file:
                 col2.markdown(f"**🤖 Auto-assigned:** `{auto_label or 'None'}`")
                 col3.markdown(f"**👤 Final label:** `{current_label}`{final_note}")
 
-    # ✅ Tải file kết quả từ sidebar + thêm final_label
     with st.sidebar:
         for example in data:
             clean_id = example["clean_id"]
@@ -204,8 +158,7 @@ if uploaded_file:
 else:
     st.info("📥 Vui lòng tải file JSON từ sidebar để bắt đầu.")
 
-import time
-
+# 🔁 Tự động reload sau mỗi 60 giây để tránh timeout trên Streamlit Cloud
 if uploaded_file:
     time.sleep(60)
     st.rerun()
