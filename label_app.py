@@ -1,4 +1,4 @@
-# multihop_nli_label_tool.py
+# multihop_nli_label_tool.py (updated)
 import streamlit as st
 import json
 import re
@@ -59,7 +59,6 @@ with st.sidebar:
     st.title("📂 File dữ liệu")
     uploaded_file = st.file_uploader("📤 Tải file JSON", type=["json"])
     export_filename = st.text_input("💾 Tên file xuất (.json)", value="updated_labeled.json")
-    export_trigger = st.button("📥 Tải xuống file kết quả")
 
 if uploaded_file:
     data = json.load(uploaded_file)
@@ -189,19 +188,9 @@ if uploaded_file:
                 col2.markdown(f"**🤖 Auto-assigned:** `{auto_label or 'None'}`")
                 col3.markdown(f"**👤 Final label:** `{current_label}`{final_note}")
 
-    if export_trigger:
-        for example in data:
-            cid = example["clean_id"]
-            if cid in edited_examples:
-                example["label"] = edited_examples[cid]
-                example["override_type"] = "manual" if example["label"] != example["auto_label"] else "auto"
-            if cid in st.session_state["edited_premises"]:
-                example["premises"] = st.session_state["edited_premises"][cid]
-            if cid in st.session_state["edited_hypothesis"]:
-                example["hypothesis"] = st.session_state["edited_hypothesis"][cid]
-
+    with st.sidebar:
         json_str = json.dumps(data, ensure_ascii=False, indent=2)
-        st.download_button("📥 Click để tải JSON", data=json_str.encode("utf-8"),
+        st.download_button("📥 Tải file kết quả", data=json_str.encode("utf-8"),
                            file_name=export_filename, mime="application/json")
 else:
     st.info("📥 Vui lòng tải file JSON từ sidebar để bắt đầu.")
