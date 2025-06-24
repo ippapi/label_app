@@ -1,4 +1,4 @@
-# multihop_nli_label_tool.py (updated)
+# multihop_nli_label_tool.py (final version)
 import streamlit as st
 import json
 import re
@@ -64,6 +64,7 @@ if uploaded_file:
     data = json.load(uploaded_file)
     st.session_state.setdefault("edited_premises", {})
     st.session_state.setdefault("edited_hypothesis", {})
+    st.session_state.setdefault("edited_label", {})
     edited_examples = {}
 
     for example in data:
@@ -174,9 +175,10 @@ if uploaded_file:
                     )
                     if override:
                         edited_examples[example["clean_id"]] = override
+                        st.session_state["edited_label"][example["clean_id"]] = override
 
                 auto_label = example.get("auto_label")
-                current_label = edited_examples.get(example["clean_id"], example["label"])
+                current_label = st.session_state["edited_label"].get(example["clean_id"], example["label"])
                 final_note = (
                     " (no auto-assigned)" if auto_label is None
                     else " (auto-assigned)" if current_label == auto_label
@@ -188,7 +190,13 @@ if uploaded_file:
                 col2.markdown(f"**🤖 Auto-assigned:** `{auto_label or 'None'}`")
                 col3.markdown(f"**👤 Final label:** `{current_label}`{final_note}")
 
+    # ✅ Tải file kết quả từ sidebar + thêm final_label
     with st.sidebar:
+        for example in data:
+            clean_id = example["clean_id"]
+            final = st.session_state["edited_label"].get(clean_id, example.get("auto_label") or example.get("label"))
+            example["final_label"] = final
+
         json_str = json.dumps(data, ensure_ascii=False, indent=2)
         st.download_button("📥 Tải file kết quả", data=json_str.encode("utf-8"),
                            file_name=export_filename, mime="application/json")
