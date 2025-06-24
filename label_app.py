@@ -16,15 +16,17 @@ with st.sidebar:
     export_filename = st.text_input("💾 Tên file xuất (.json)", value="updated_labeled.json")
     export_trigger = st.button("📥 Tải xuống file kết quả")
 
+# Main
 if uploaded_file:
     data = json.load(uploaded_file)
-    st.session_state.setdefault("data_loaded", True)
+
     st.session_state.setdefault("edited_premises", {})
     st.session_state.setdefault("edited_hypothesis", {})
     st.session_state.setdefault("edit_history", {})
 
     edited_examples = {}
 
+    # Xử lý từng mẫu
     for example in data:
         raw_id = example.get("id", "")
         match = re.search(r'_(\d+)$', raw_id)
@@ -71,14 +73,13 @@ if uploaded_file:
             index_key = f"{tab_name}_index"
             st.session_state.setdefault(index_key, 0)
 
-            # Tìm kiếm
             col1, col2, col3 = st.columns([4, 3, 3])
             with col1:
-                search_id = st.text_input("🔎 Tìm theo ID (chỉ số)", key=f"{tab_name}_search_id")
+                search_id = st.text_input("🔎 Tìm theo ID", key=f"{tab_name}_search_id")
             with col2:
                 max_page = max(1, len(subset))
                 default_goto = min(st.session_state.get(f"{tab_name}_goto_index", 1), max_page)
-                goto_page = st.number_input("🔢 Đi đến vị trí", 1, max_page, default_goto, 1, key=f"{tab_name}_goto_index")
+                goto_page = st.number_input("🔢 Đi đến vị trí", 1, max_page, default_goto, key=f"{tab_name}_goto_index")
             with col3:
                 if st.button("🚀 Tìm / Chuyển trang", key=f"{tab_name}_search_btn"):
                     found = False
@@ -92,9 +93,7 @@ if uploaded_file:
                         if not found:
                             st.warning(f"⚠️ Không tìm thấy ID `{search_id}`.")
                     else:
-                        idx = int(goto_page) - 1
-                        if 0 <= idx < len(subset):
-                            st.session_state[index_key] = idx
+                        st.session_state[index_key] = int(goto_page) - 1
 
             if not subset:
                 st.info("Không có mẫu nào trong tab này.")
@@ -115,7 +114,7 @@ if uploaded_file:
                 st.markdown("---")
                 st.markdown(f"🧾 **ID:** `{example['id']}` → `{example['clean_id']}` ({current_index+1}/{len(subset)})")
 
-                # Premises
+                # === Premises ===
                 st.markdown("#### 🧱 Premises:")
                 updated_premises = []
                 for j, p in enumerate(example.get("premises", [])):
@@ -123,56 +122,60 @@ if uploaded_file:
                     st.session_state["edit_history"].setdefault(hist_key, {"history": [p], "index": 0})
                     hist = st.session_state["edit_history"][hist_key]
                     current_val = hist["history"][hist["index"]]
-
                     ta_key = f"{tab_name}_{hist_key}"
-                    new_val = st.text_area(f"Premise {j+1}:", value=current_val, key=ta_key)
 
-                    colu1, colu2, colu3 = st.columns([1, 1, 8])
-                    with colu1:
-                        if st.button("↩️ Undo", key=f"{ta_key}_undo") and hist["index"] > 0:
-                            hist["index"] -= 1
-                    with colu2:
-                        if st.button("↪️ Redo", key=f"{ta_key}_redo") and hist["index"] < len(hist["history"]) - 1:
-                            hist["index"] += 1
-                    with colu3:
-                        if st.button("🔁 Reset", key=f"{ta_key}_reset"):
+                    c1, c2, c3, c4, c5 = st.columns([6, 1, 1, 1, 1])
+                    with c1:
+                        st.markdown(f"**Premise {j+1}:**")
+                    with c2:
+                        if st.button("🔄", help="Reset", key=f"{ta_key}_reset"):
                             hist["history"].append(p)
                             hist["index"] = len(hist["history"]) - 1
+                    with c3:
+                        if st.button("↩️", help="Undo", key=f"{ta_key}_undo") and hist["index"] > 0:
+                            hist["index"] -= 1
+                    with c4:
+                        if st.button("↪️", help="Redo", key=f"{ta_key}_redo") and hist["index"] < len(hist["history"]) - 1:
+                            hist["index"] += 1
 
-                    if new_val != current_val:
+                    new_val = st.text_area("", value=hist["history"][hist["index"]],
+                                           key=ta_key, height=60, label_visibility="collapsed")
+
+                    if new_val != hist["history"][hist["index"]]:
                         hist["history"] = hist["history"][:hist["index"] + 1] + [new_val]
                         hist["index"] += 1
 
                     updated_premises.append(hist["history"][hist["index"]])
                 st.session_state["edited_premises"][example["clean_id"]] = updated_premises
 
-                # Hypothesis
+                # === Hypothesis ===
                 st.markdown("#### 🔮 Hypothesis:")
                 hyp_key = f"{example['clean_id']}_hypothesis"
                 original_hyp = example.get("hypothesis", "")
                 st.session_state["edit_history"].setdefault(hyp_key, {"history": [original_hyp], "index": 0})
                 hist = st.session_state["edit_history"][hyp_key]
-                current_val = hist["history"][hist["index"]]
-
                 ta_key = f"{tab_name}_{hyp_key}"
-                new_val = st.text_area("Hypothesis:", value=current_val, key=ta_key)
 
-                colu1, colu2, colu3 = st.columns([1, 1, 8])
-                with colu1:
-                    if st.button("↩️ Undo", key=f"{ta_key}_undo") and hist["index"] > 0:
-                        hist["index"] -= 1
-                with colu2:
-                    if st.button("↪️ Redo", key=f"{ta_key}_redo") and hist["index"] < len(hist["history"]) - 1:
-                        hist["index"] += 1
-                with colu3:
-                    if st.button("🔁 Reset", key=f"{ta_key}_reset"):
+                c1, c2, c3, c4, c5 = st.columns([6, 1, 1, 1, 1])
+                with c1:
+                    st.markdown("**Hypothesis:**")
+                with c2:
+                    if st.button("🔄", help="Reset", key=f"{ta_key}_reset"):
                         hist["history"].append(original_hyp)
                         hist["index"] = len(hist["history"]) - 1
+                with c3:
+                    if st.button("↩️", help="Undo", key=f"{ta_key}_undo") and hist["index"] > 0:
+                        hist["index"] -= 1
+                with c4:
+                    if st.button("↪️", help="Redo", key=f"{ta_key}_redo") and hist["index"] < len(hist["history"]) - 1:
+                        hist["index"] += 1
 
-                if new_val != current_val:
-                    hist["history"] = hist["history"][:hist["index"] + 1] + [new_val]
+                edited_val = st.text_area("", value=hist["history"][hist["index"]],
+                                          key=ta_key, height=80, label_visibility="collapsed")
+
+                if edited_val != hist["history"][hist["index"]]:
+                    hist["history"] = hist["history"][:hist["index"] + 1] + [edited_val]
                     hist["index"] += 1
-
                 st.session_state["edited_hypothesis"][example["clean_id"]] = hist["history"][hist["index"]]
 
                 # Model votes
@@ -180,7 +183,7 @@ if uploaded_file:
                 for model, vote in example.get("model_votes", {}).items():
                     st.markdown(f"- `{model}` → **{vote}**")
 
-                # Chỉnh label
+                # Label override
                 with st.expander("✏️ Chỉnh nhãn thủ công"):
                     override = st.selectbox(
                         "Chọn nhãn mới:",
@@ -203,7 +206,7 @@ if uploaded_file:
                 col2.markdown(f"**🤖 Auto-assigned:** `{auto_label or 'None'}`")
                 col3.markdown(f"**👤 Final label:** `{current_label}`{final_note}")
 
-    # Export
+    # Export JSON
     if export_trigger:
         for example in data:
             cid = example["clean_id"]
