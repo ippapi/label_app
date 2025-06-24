@@ -1,32 +1,72 @@
+# multihop_nli_label_tool.py
 import streamlit as st
 import json
 import re
 from collections import Counter
 
-st.set_page_config(
-    page_title="Multihop NLI Label Review",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
+def edit_text_with_history(label: str, key_prefix: str, original_text: str, height=80):
+    key = key_prefix
+    reset_key = key + "_reset"
+    undo_key = key + "_undo"
+    redo_key = key + "_redo"
 
-# Sidebar
+    st.session_state.setdefault("edit_history", {})
+    st.session_state["edit_history"].setdefault(key, {"history": [original_text], "index": 0})
+    hist = st.session_state["edit_history"][key]
+
+    for k in [reset_key, undo_key, redo_key]:
+        st.session_state.setdefault(k, False)
+
+    c1, c2, c3, c4, c5 = st.columns([6, 1, 1, 1, 1])
+    with c1:
+        st.markdown(f"**{label}**")
+    with c2:
+        if st.button("🔄", help="Reset", key=reset_key + "_btn"):
+            st.session_state[reset_key] = True
+    with c3:
+        if st.button("↩️", help="Undo", key=undo_key + "_btn"):
+            st.session_state[undo_key] = True
+    with c4:
+        if st.button("↪️", help="Redo", key=redo_key + "_btn"):
+            st.session_state[redo_key] = True
+
+    if st.session_state[reset_key]:
+        hist["history"].append(original_text)
+        hist["index"] = len(hist["history"]) - 1
+        st.session_state[reset_key] = False
+
+    if st.session_state[undo_key] and hist["index"] > 0:
+        hist["index"] -= 1
+        st.session_state[undo_key] = False
+
+    if st.session_state[redo_key] and hist["index"] < len(hist["history"]) - 1:
+        hist["index"] += 1
+        st.session_state[redo_key] = False
+
+    new_val = st.text_area(
+        "", value=hist["history"][hist["index"]],
+        key=key, height=height, label_visibility="collapsed"
+    )
+
+    if new_val != hist["history"][hist["index"]]:
+        hist["history"] = hist["history"][:hist["index"] + 1] + [new_val]
+        hist["index"] += 1
+
+    return hist["history"][hist["index"]]
+
+st.set_page_config(page_title="Multihop NLI Label Review", layout="wide", initial_sidebar_state="expanded")
 with st.sidebar:
     st.title("📂 File dữ liệu")
     uploaded_file = st.file_uploader("📤 Tải file JSON", type=["json"])
     export_filename = st.text_input("💾 Tên file xuất (.json)", value="updated_labeled.json")
     export_trigger = st.button("📥 Tải xuống file kết quả")
 
-# Main
 if uploaded_file:
     data = json.load(uploaded_file)
-
     st.session_state.setdefault("edited_premises", {})
     st.session_state.setdefault("edited_hypothesis", {})
-    st.session_state.setdefault("edit_history", {})
-
     edited_examples = {}
 
-    # Xử lý từng mẫu
     for example in data:
         raw_id = example.get("id", "")
         match = re.search(r'_(\d+)$', raw_id)
@@ -36,7 +76,6 @@ if uploaded_file:
         validated_labels = {k: v for k, v in example.items() if k.endswith("_validated")}
         label_counts = Counter(validated_labels.values())
         model_votes = {k.split("/")[-2]: v for k, v in validated_labels.items()}
-
         most_common = label_counts.most_common(1)
         auto_label = most_common[0][0] if most_common and most_common[0][1] >= 2 else None
         num_agree = most_common[0][1] if most_common else 0
@@ -48,7 +87,6 @@ if uploaded_file:
         example["num_agree"] = num_agree
         example["model_votes"] = model_votes
 
-    # Tabs
     tab_groups = {
         "🧠 Auto-assigned": [ex for ex in data if ex["override_type"] == "auto"],
         "✍️ Manually assigned": [ex for ex in data if ex["override_type"] == "manual"
@@ -69,7 +107,6 @@ if uploaded_file:
         subset = tab_groups[tab_name]
         with tabs[i]:
             st.markdown(f"### 📊 Số lượng mẫu: {len(subset)}")
-
             index_key = f"{tab_name}_index"
             st.session_state.setdefault(index_key, 0)
 
@@ -114,77 +151,22 @@ if uploaded_file:
                 st.markdown("---")
                 st.markdown(f"🧾 **ID:** `{example['id']}` → `{example['clean_id']}` ({current_index+1}/{len(subset)})")
 
-                # === Premises ===
-                st.markdown("#### 🧱 Premises:")
                 updated_premises = []
                 for j, p in enumerate(example.get("premises", [])):
-                    hist_key = f"{example['clean_id']}_premise_{j}"
-                    st.session_state["edit_history"].setdefault(hist_key, {"history": [p], "index": 0})
-                    hist = st.session_state["edit_history"][hist_key]
-                    current_val = hist["history"][hist["index"]]
-                    ta_key = f"{tab_name}_{hist_key}"
-
-                    c1, c2, c3, c4, c5 = st.columns([6, 1, 1, 1, 1])
-                    with c1:
-                        st.markdown(f"**Premise {j+1}:**")
-                    with c2:
-                        if st.button("🔄", help="Reset", key=f"{ta_key}_reset"):
-                            hist["history"].append(p)
-                            hist["index"] = len(hist["history"]) - 1
-                    with c3:
-                        if st.button("↩️", help="Undo", key=f"{ta_key}_undo") and hist["index"] > 0:
-                            hist["index"] -= 1
-                    with c4:
-                        if st.button("↪️", help="Redo", key=f"{ta_key}_redo") and hist["index"] < len(hist["history"]) - 1:
-                            hist["index"] += 1
-
-                    new_val = st.text_area("", value=hist["history"][hist["index"]],
-                       key=ta_key, height=80, label_visibility="collapsed")
-
-
-                    if new_val != hist["history"][hist["index"]]:
-                        hist["history"] = hist["history"][:hist["index"] + 1] + [new_val]
-                        hist["index"] += 1
-
-                    updated_premises.append(hist["history"][hist["index"]])
+                    field_key = f"{example['clean_id']}_premise_{j}"
+                    updated_val = edit_text_with_history(f"Premise {j+1}:", f"{tab_name}_{field_key}", p, height=80)
+                    updated_premises.append(updated_val)
                 st.session_state["edited_premises"][example["clean_id"]] = updated_premises
 
-                # === Hypothesis ===
-                st.markdown("#### 🔮 Hypothesis:")
                 hyp_key = f"{example['clean_id']}_hypothesis"
                 original_hyp = example.get("hypothesis", "")
-                st.session_state["edit_history"].setdefault(hyp_key, {"history": [original_hyp], "index": 0})
-                hist = st.session_state["edit_history"][hyp_key]
-                ta_key = f"{tab_name}_{hyp_key}"
+                edited_hyp = edit_text_with_history("Hypothesis:", f"{tab_name}_{hyp_key}", original_hyp, height=100)
+                st.session_state["edited_hypothesis"][example["clean_id"]] = edited_hyp
 
-                c1, c2, c3, c4, c5 = st.columns([6, 1, 1, 1, 1])
-                with c1:
-                    st.markdown("**Hypothesis:**")
-                with c2:
-                    if st.button("🔄", help="Reset", key=f"{ta_key}_reset"):
-                        hist["history"].append(original_hyp)
-                        hist["index"] = len(hist["history"]) - 1
-                with c3:
-                    if st.button("↩️", help="Undo", key=f"{ta_key}_undo") and hist["index"] > 0:
-                        hist["index"] -= 1
-                with c4:
-                    if st.button("↪️", help="Redo", key=f"{ta_key}_redo") and hist["index"] < len(hist["history"]) - 1:
-                        hist["index"] += 1
-
-                edited_val = st.text_area("", value=hist["history"][hist["index"]],
-                                          key=ta_key, height=80, label_visibility="collapsed")
-
-                if edited_val != hist["history"][hist["index"]]:
-                    hist["history"] = hist["history"][:hist["index"] + 1] + [edited_val]
-                    hist["index"] += 1
-                st.session_state["edited_hypothesis"][example["clean_id"]] = hist["history"][hist["index"]]
-
-                # Model votes
                 st.markdown("#### 🧠 Model votes:")
                 for model, vote in example.get("model_votes", {}).items():
                     st.markdown(f"- `{model}` → **{vote}**")
 
-                # Label override
                 with st.expander("✏️ Chỉnh nhãn thủ công"):
                     override = st.selectbox(
                         "Chọn nhãn mới:",
@@ -207,7 +189,6 @@ if uploaded_file:
                 col2.markdown(f"**🤖 Auto-assigned:** `{auto_label or 'None'}`")
                 col3.markdown(f"**👤 Final label:** `{current_label}`{final_note}")
 
-    # Export JSON
     if export_trigger:
         for example in data:
             cid = example["clean_id"]
