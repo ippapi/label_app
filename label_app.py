@@ -208,4 +208,4 @@ import time
 
 if uploaded_file:
     time.sleep(60)
-    st.experimental_rerun()
+    st.rerun()
