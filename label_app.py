@@ -139,7 +139,8 @@ if uploaded_file:
                             hist["index"] += 1
 
                     new_val = st.text_area("", value=hist["history"][hist["index"]],
-                                           key=ta_key, height=60, label_visibility="collapsed")
+                       key=ta_key, height=80, label_visibility="collapsed")
+
 
                     if new_val != hist["history"][hist["index"]]:
                         hist["history"] = hist["history"][:hist["index"] + 1] + [new_val]
