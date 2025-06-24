@@ -1,4 +1,4 @@
-# multihop_nli_label_tool.py (final version)
+# multihop_nli_label_tool.py
 import streamlit as st
 import json
 import re
@@ -80,7 +80,8 @@ if uploaded_file:
         auto_label = most_common[0][0] if most_common and most_common[0][1] >= 2 else None
         num_agree = most_common[0][1] if most_common else 0
 
-        example["label"] = auto_label if auto_label else example.get("label", "")
+        # ❗ Không thay đổi example["label"]
+        example["label"] = example.get("label", "")
         example["override_type"] = "auto" if auto_label else "manual"
         example["original_label"] = example.get("original_label", example.get("label", "unknown"))
         example["auto_label"] = auto_label
@@ -178,7 +179,7 @@ if uploaded_file:
                         st.session_state["edited_label"][example["clean_id"]] = override
 
                 auto_label = example.get("auto_label")
-                current_label = st.session_state["edited_label"].get(example["clean_id"], example["label"])
+                current_label = st.session_state["edited_label"].get(example["clean_id"], auto_label or example["label"])
                 final_note = (
                     " (no auto-assigned)" if auto_label is None
                     else " (auto-assigned)" if current_label == auto_label
@@ -186,7 +187,7 @@ if uploaded_file:
                 )
 
                 col1, col2, col3 = st.columns(3)
-                col1.markdown(f"**🔖 Original label:** `{example.get('original_label', 'N/A')}`")
+                col1.markdown(f"**🔖 Original label:** `{example.get('label', 'N/A')}`")
                 col2.markdown(f"**🤖 Auto-assigned:** `{auto_label or 'None'}`")
                 col3.markdown(f"**👤 Final label:** `{current_label}`{final_note}")
 
