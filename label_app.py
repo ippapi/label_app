@@ -42,17 +42,19 @@ if uploaded_file:
         example["num_agree"] = num_agree
         example["model_votes"] = model_votes
 
+        final = st.session_state["edited_label"].get(clean_id, auto_label or example["label"])
+        example["final_label"] = final
+
     tab_groups = {
         "\U0001F9E0 Auto-assigned": [ex for ex in data if ex["override_type"] == "auto"],
-        "✍️ Manually assigned": [ex for ex in data if ex["override_type"] == "manual"
-                                     and ex["auto_label"] is not None and ex["label"] != ex["auto_label"]],
+        "✍️ Manually assigned": [ex for ex in data if st.session_state["edited_label"].get(ex["clean_id"]) and st.session_state["edited_label"][ex["clean_id"]] != ex.get("auto_label")],
         "✅ 3/3 models agree": [ex for ex in data if ex["num_agree"] == 3],
         "⚠️ 2/3 models agree": [ex for ex in data if ex["num_agree"] == 2],
         "❌ 1/3 or all different": [ex for ex in data if ex["num_agree"] <= 1],
-        "\U0001F7E9 entailment": [ex for ex in data if ex["label"] == "entailment"],
-        "\U0001F7E5 contradiction": [ex for ex in data if ex["label"] == "contradiction"],
-        "\U0001F7E8 neutral": [ex for ex in data if ex["label"] == "neutral"],
-        "\U0001F7E6 implicature": [ex for ex in data if ex["label"] == "implicature"],
+        "\U0001F7E9 entailment": [ex for ex in data if ex["final_label"] == "entailment"],
+        "\U0001F7E5 contradiction": [ex for ex in data if ex["final_label"] == "contradiction"],
+        "\U0001F7E8 neutral": [ex for ex in data if ex["final_label"] == "neutral"],
+        "\U0001F7E6 implicature": [ex for ex in data if ex["final_label"] == "implicature"],
     }
 
     tab_names = list(tab_groups.keys())
@@ -151,11 +153,6 @@ if uploaded_file:
                 col3.markdown(f"**\U0001F464 Final label:** `{current_label}`{final_note}")
 
     with st.sidebar:
-        for example in data:
-            clean_id = example["clean_id"]
-            final = st.session_state["edited_label"].get(clean_id, example.get("auto_label") or example.get("label"))
-            example["final_label"] = final
-
         json_str = json.dumps(data, ensure_ascii=False, indent=2)
         st.download_button("\U0001F4E5 Tải file kết quả", data=json_str.encode("utf-8"),
                            file_name=export_filename, mime="application/json")
