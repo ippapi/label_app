@@ -44,10 +44,20 @@ if uploaded_file:
             example["auto_label"] = auto_label
             example["num_agree"] = num_agree
             example["model_votes"] = model_votes
-            example["final_label"] = st.session_state["edited_label"].get(clean_id, auto_label or example["label"])
+
+            if clean_id in st.session_state["edited_label"]:
+                example["final_label"] = st.session_state["edited_label"][clean_id]
+            elif auto_label:
+                example["final_label"] = auto_label
+            else:
+                example["final_label"] = None
         else:
-            final = st.session_state["edited_label"].get(clean_id, example["final_label"])
-            example["final_label"] = final
+            if clean_id in st.session_state["edited_label"]:
+                example["final_label"] = st.session_state["edited_label"][clean_id]
+            elif example.get("auto_label"):
+                example["final_label"] = example["auto_label"]
+            else:
+                example["final_label"] = None
 
     tab_groups = {
         "🧠 Auto-assigned": [ex for ex in data if ex["override_type"] == "auto"],
@@ -131,7 +141,7 @@ if uploaded_file:
                 with st.expander("✍️ Chỉnh nhãn thủ công"):
                     override_key = f"{tab_name}_{example['clean_id']}_override_{current_index}"
                     current_override = st.session_state.get("edited_label", {}).get(
-                        example["clean_id"], example.get("auto_label") or example.get("label")
+                        example["clean_id"], example.get("auto_label")
                     )
                     override = st.selectbox(
                         "Chọn nhãn mới:",
@@ -144,7 +154,7 @@ if uploaded_file:
                         st.session_state["edited_label"][example["clean_id"]] = override
 
                 auto_label = example.get("auto_label")
-                current_label = st.session_state["edited_label"].get(example["clean_id"], auto_label or example["label"])
+                current_label = st.session_state["edited_label"].get(example["clean_id"], auto_label)
                 final_note = (
                     " (no auto-assigned)" if auto_label is None
                     else " (auto-assigned)" if current_label == auto_label
