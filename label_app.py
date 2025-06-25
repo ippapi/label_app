@@ -5,8 +5,11 @@ from collections import Counter
 import time
 
 def edit_text_simple(label: str, key: str, original_text: str, height=80):
+    if key not in st.session_state:
+        st.session_state[key] = original_text
     st.markdown(f"**{label}**")
-    return st.text_area("", value=original_text, key=key, height=height, label_visibility="collapsed")
+    st.text_area("", key=key, height=height, label_visibility="collapsed")
+    return st.session_state[key]
 
 st.set_page_config(page_title="Multihop NLI Label Review", layout="wide", initial_sidebar_state="expanded")
 
@@ -109,14 +112,14 @@ if uploaded_file:
                 updated_premises = []
                 for j, p in enumerate(example.get("premises", [])):
                     field_key = f"{tab_name}_{example['clean_id']}_premise_{j}"
-                    updated_val = edit_text_simple(f"Premise {j+1}:", field_key, p, height=80)
-                    updated_premises.append(updated_val)
+                    edit_text_simple(f"Premise {j+1}:", field_key, p, height=80)
+                    updated_premises.append(st.session_state[field_key])
                 st.session_state["edited_premises"][example["clean_id"]] = updated_premises
 
                 hyp_key = f"{tab_name}_{example['clean_id']}_hypothesis"
                 original_hyp = example.get("hypothesis", "")
-                edited_hyp = edit_text_simple("Hypothesis:", hyp_key, original_hyp, height=100)
-                st.session_state["edited_hypothesis"][example["clean_id"]] = edited_hyp
+                edit_text_simple("Hypothesis:", hyp_key, original_hyp, height=100)
+                st.session_state["edited_hypothesis"][example["clean_id"]] = st.session_state[hyp_key]
 
                 st.markdown("#### 🧠 Model votes:")
                 for model, vote in example.get("model_votes", {}).items():
@@ -145,7 +148,7 @@ if uploaded_file:
                 col2.markdown(f"**🤖 Auto-assigned:** `{auto_label or 'None'}`")
                 col3.markdown(f"**👤 Final label:** `{current_label}`{final_note}")
 
-    # ✅ Export bao gồm cả premise, hypothesis, label
+    # ✅ Ghi vào file tải về
     with st.sidebar:
         for example in data:
             clean_id = example["clean_id"]
@@ -165,7 +168,7 @@ if uploaded_file:
 else:
     st.info("📥 Vui lòng tải file JSON từ sidebar để bắt đầu.")
 
-# 🔁 Tự động reload sau mỗi 60 giây để tránh timeout trên Streamlit Cloud
+# 🔁 Reload sau 60 giây trên Streamlit Cloud
 if uploaded_file:
     time.sleep(60)
     st.rerun()
