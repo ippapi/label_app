@@ -124,11 +124,16 @@ if uploaded_file:
 
                 with st.expander("✍️ Chỉnh nhãn thủ công"):
                     override_key = f"{tab_name}_{example['clean_id']}_override"
-                    current_override = st.session_state.get(override_key, "")
+                    if override_key not in st.session_state:
+                        st.session_state[override_key] = st.session_state["edited_label"].get(
+                            example["clean_id"], example.get("auto_label") or example.get("label")
+                        )
                     override = st.selectbox(
                         "Chọn nhãn mới:",
                         ["", "entailment", "contradiction", "neutral", "implicature"],
-                        index=["", "entailment", "contradiction", "neutral", "implicature"].index(current_override) if current_override in ["", "entailment", "contradiction", "neutral", "implicature"] else 0,
+                        index=["", "entailment", "contradiction", "neutral", "implicature"].index(
+                            st.session_state[override_key]
+                        ) if st.session_state[override_key] in ["", "entailment", "contradiction", "neutral", "implicature"] else 0,
                         key=override_key
                     )
                     if override:
