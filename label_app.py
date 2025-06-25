@@ -1,3 +1,4 @@
+
 import streamlit as st
 import json
 import re
@@ -28,150 +29,45 @@ if uploaded_file:
         clean_id = match.group(1) if match else raw_id
         example["clean_id"] = example.get("clean_id", clean_id)
 
-        has_processed = all(k in example for k in ["auto_label", "final_label", "model_votes", "num_agree"])
+        validated_labels = {
+            k: v.strip().lower() for k, v in example.items()
+            if k.endswith("_validated") and isinstance(v, str)
+        }
+        label_counts = Counter(validated_labels.values())
+        model_votes = {k.split("/")[-2]: v.strip().lower() for k, v in validated_labels.items()}
+        most_common = label_counts.most_common(1)
+        auto_label = most_common[0][0] if most_common and most_common[0][1] >= 2 else None
+        num_agree = most_common[0][1] if most_common else 0
 
-        if not has_processed:
-            validated_labels = {k: v for k, v in example.items() if k.endswith("_validated")}
-            label_counts = Counter(validated_labels.values())
-            model_votes = {k.split("/")[-2]: v for k, v in validated_labels.items()}
-            most_common = label_counts.most_common(1)
-            auto_label = most_common[0][0] if most_common and most_common[0][1] >= 2 else None
-            num_agree = most_common[0][1] if most_common else 0
-
-            example["label"] = example.get("label", "")
-            example["override_type"] = "auto" if auto_label else "manual"
-            example["original_label"] = example.get("original_label", example.get("label", "unknown"))
-            example["auto_label"] = auto_label
-            example["num_agree"] = num_agree
-            example["model_votes"] = model_votes
-
-            if clean_id in st.session_state["edited_label"]:
-                example["final_label"] = st.session_state["edited_label"][clean_id]
-            elif auto_label:
-                example["final_label"] = auto_label
-            else:
-                example["final_label"] = None
+        example["label"] = example.get("label", "")
+        if clean_id in st.session_state["edited_label"]:
+            final_label = st.session_state["edited_label"][clean_id]
+            override_type = "manual"
+        elif auto_label:
+            final_label = auto_label
+            override_type = "auto"
         else:
-            if clean_id in st.session_state["edited_label"]:
-                example["final_label"] = st.session_state["edited_label"][clean_id]
-            elif example.get("auto_label"):
-                example["final_label"] = example["auto_label"]
-            else:
-                example["final_label"] = None
+            final_label = None
+            override_type = "manual"
+
+        example["override_type"] = override_type
+        example["original_label"] = example.get("original_label", example.get("label", "unknown"))
+        example["auto_label"] = auto_label
+        example["num_agree"] = num_agree
+        example["model_votes"] = model_votes
+        example["final_label"] = final_label
+
+    st.write("✅ File loaded và auto-label/final-label đã tính xong!")
 
     tab_groups = {
         "🧠 Auto-assigned": [ex for ex in data if ex["override_type"] == "auto"],
-        "✍️ Manually assigned": [ex for ex in data if st.session_state["edited_label"].get(ex["clean_id"]) and st.session_state["edited_label"][ex["clean_id"]] != ex.get("auto_label")],
-        "✅ 3/3 models agree": [ex for ex in data if ex["num_agree"] == 3],
-        "⚠️ 2/3 models agree": [ex for ex in data if ex["num_agree"] == 2],
-        "❌ 1/3 or all different": [ex for ex in data if ex["num_agree"] <= 1],
-        "🟩 entailment": [ex for ex in data if ex["final_label"] == "entailment"],
-        "🟥 contradiction": [ex for ex in data if ex["final_label"] == "contradiction"],
-        "🟨 neutral": [ex for ex in data if ex["final_label"] == "neutral"],
-        "🟦 implicature": [ex for ex in data if ex["final_label"] == "implicature"],
+        "✍️ Manually assigned": [ex for ex in data if ex["override_type"] == "manual"],
     }
 
-    tab_names = list(tab_groups.keys())
-    tabs = st.tabs(tab_names)
+    for tab_name, examples in tab_groups.items():
+        st.markdown(f"### {tab_name} — {len(examples)} mẫu")
+        for ex in examples[:5]:
+            st.markdown(f"- `{ex['id']}` → **{ex['final_label']}**")
 
-    for i, tab_name in enumerate(tab_names):
-        subset = tab_groups[tab_name]
-        with tabs[i]:
-            st.markdown(f"### 📊 Số lượng mẫu: {len(subset)}")
-            index_key = f"{tab_name}_index"
-            st.session_state.setdefault(index_key, 0)
-
-            col1, col2, col3 = st.columns([4, 3, 3])
-            with col1:
-                search_id = st.text_input("🔍 Tìm theo ID", key=f"{tab_name}_search_id")
-            with col2:
-                max_page = max(1, len(subset))
-                default_goto = min(st.session_state.get(f"{tab_name}_goto_index", 1), max_page)
-                goto_page = st.number_input("🔢 Đi đến vị trí", 1, max_page, default_goto, key=f"{tab_name}_goto_index")
-            with col3:
-                if st.button("🚀 Tìm / Chuyển trang", key=f"{tab_name}_search_btn"):
-                    found = False
-                    if search_id:
-                        for idx, ex in enumerate(subset):
-                            if ex["clean_id"] == search_id:
-                                st.session_state[index_key] = idx
-                                st.success(f"🔍 Tìm thấy ID `{search_id}` ở vị trí {idx+1}/{len(subset)}")
-                                found = True
-                                break
-                        if not found:
-                            st.warning(f"⚠️ Không tìm thấy ID `{search_id}`.")
-                    else:
-                        st.session_state[index_key] = int(goto_page) - 1
-
-            if not subset:
-                st.info("Không có mẫu nào trong tab này.")
-                continue
-
-            nav_left, main_col, nav_right = st.columns([1, 10, 1])
-            with nav_left:
-                if st.button("◀️", key=f"{tab_name}_prev"):
-                    st.session_state[index_key] = max(0, st.session_state[index_key] - 1)
-            with nav_right:
-                if st.button("▶️", key=f"{tab_name}_next"):
-                    st.session_state[index_key] = min(len(subset) - 1, st.session_state[index_key] + 1)
-
-            current_index = st.session_state[index_key]
-            example = subset[current_index]
-
-            with main_col:
-                st.markdown("---")
-                st.markdown(f"🧾 **ID:** `{example['id']}` → `{example['clean_id']}` ({current_index+1}/{len(subset)})")
-
-                updated_premises = []
-                for j, p in enumerate(example.get("premises", [])):
-                    field_key = f"{tab_name}_{example['clean_id']}_premise_{j}_{current_index}"
-                    edited_text = edit_text_simple(f"Premise {j+1}:", field_key, p, height=80)
-                    updated_premises.append(edited_text)
-                example["premises"] = updated_premises
-
-                hyp_key = f"{tab_name}_{example['clean_id']}_hypothesis_{current_index}"
-                original_hyp = example.get("hypothesis", "")
-                edited_hyp = edit_text_simple("Hypothesis:", hyp_key, original_hyp, height=100)
-                example["hypothesis"] = edited_hyp
-
-                st.markdown("#### 🧠 Model votes:")
-                for model, vote in example.get("model_votes", {}).items():
-                    st.markdown(f"- `{model}` → **{vote}**")
-
-                with st.expander("✍️ Chỉnh nhãn thủ công"):
-                    override_key = f"{tab_name}_{example['clean_id']}_override_{current_index}"
-                    current_override = st.session_state.get("edited_label", {}).get(
-                        example["clean_id"], example.get("auto_label")
-                    )
-                    override = st.selectbox(
-                        "Chọn nhãn mới:",
-                        ["", "entailment", "contradiction", "neutral", "implicature"],
-                        index=["", "entailment", "contradiction", "neutral", "implicature"].index(current_override) if current_override in ["", "entailment", "contradiction", "neutral", "implicature"] else 0,
-                        key=override_key
-                    )
-                    if override:
-                        edited_examples[example["clean_id"]] = override
-                        st.session_state["edited_label"][example["clean_id"]] = override
-
-                auto_label = example.get("auto_label")
-                current_label = st.session_state["edited_label"].get(example["clean_id"], auto_label)
-                final_note = (
-                    " (no auto-assigned)" if auto_label is None
-                    else " (auto-assigned)" if current_label == auto_label
-                    else " (overridden manually)"
-                )
-
-                col1, col2, col3 = st.columns(3)
-                col1.markdown(f"**🔖 Original label:** `{example.get('label', 'N/A')}`")
-                col2.markdown(f"**🤖 Auto-assigned:** `{auto_label or 'None'}`")
-                col3.markdown(f"**👤 Final label:** `{current_label}`{final_note}")
-
-    with st.sidebar:
-        json_str = json.dumps(data, ensure_ascii=False, indent=2)
-        st.download_button("📥 Tải file kết quả", data=json_str.encode("utf-8"),
-                           file_name=export_filename, mime="application/json")
-
-    time.sleep(60)
-    st.rerun()
 else:
     st.info("📥 Vui lòng tải file JSON từ sidebar để bắt đầu.")
