@@ -5,10 +5,10 @@ from collections import Counter
 import time
 
 def edit_text_simple(label: str, key: str, original_text: str, height=80):
-    if key not in st.session_state:
-        st.session_state[key] = original_text
+    current_value = st.session_state.get(key, original_text)
     st.markdown(f"**{label}**")
-    return st.text_area("", key=key, height=height, label_visibility="collapsed")
+    updated = st.text_area("", value=current_value, key=key, height=height, label_visibility="collapsed")
+    return updated
 
 st.set_page_config(page_title="Multihop NLI Label Review", layout="wide", initial_sidebar_state="expanded")
 
@@ -123,10 +123,13 @@ if uploaded_file:
                     st.markdown(f"- `{model}` → **{vote}**")
 
                 with st.expander("✍️ Chỉnh nhãn thủ công"):
+                    override_key = f"{tab_name}_{example['clean_id']}_override"
+                    current_override = st.session_state.get(override_key, "")
                     override = st.selectbox(
                         "Chọn nhãn mới:",
                         ["", "entailment", "contradiction", "neutral", "implicature"],
-                        key=f"{tab_name}_{example['clean_id']}_override"
+                        index=["", "entailment", "contradiction", "neutral", "implicature"].index(current_override) if current_override in ["", "entailment", "contradiction", "neutral", "implicature"] else 0,
+                        key=override_key
                     )
                     if override:
                         edited_examples[example["clean_id"]] = override
