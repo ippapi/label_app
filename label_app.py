@@ -23,13 +23,11 @@ if uploaded_file:
     edited_examples = {}
 
     for example in data:
-        # Bước 1: Tạo clean_id nếu chưa có
         raw_id = example.get("id", "")
         match = re.search(r'_(\d+)$', raw_id)
         clean_id = match.group(1) if match else raw_id
         example["clean_id"] = example.get("clean_id", clean_id)
 
-        # Bước 2: Kiểm tra xem đã xử lý chưa
         has_processed = all(k in example for k in ["auto_label", "final_label", "model_votes", "num_agree"])
 
         if not has_processed:
@@ -142,4 +140,28 @@ if uploaded_file:
                         key=override_key
                     )
                     if override:
-                        edited_e_
+                        edited_examples[example["clean_id"]] = override
+                        st.session_state["edited_label"][example["clean_id"]] = override
+
+                auto_label = example.get("auto_label")
+                current_label = st.session_state["edited_label"].get(example["clean_id"], auto_label or example["label"])
+                final_note = (
+                    " (no auto-assigned)" if auto_label is None
+                    else " (auto-assigned)" if current_label == auto_label
+                    else " (overridden manually)"
+                )
+
+                col1, col2, col3 = st.columns(3)
+                col1.markdown(f"**🔖 Original label:** `{example.get('label', 'N/A')}`")
+                col2.markdown(f"**🤖 Auto-assigned:** `{auto_label or 'None'}`")
+                col3.markdown(f"**👤 Final label:** `{current_label}`{final_note}")
+
+    with st.sidebar:
+        json_str = json.dumps(data, ensure_ascii=False, indent=2)
+        st.download_button("📥 Tải file kết quả", data=json_str.encode("utf-8"),
+                           file_name=export_filename, mime="application/json")
+
+    time.sleep(60)
+    st.rerun()
+else:
+    st.info("📥 Vui lòng tải file JSON từ sidebar để bắt đầu.")
