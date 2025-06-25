@@ -23,6 +23,7 @@ if uploaded_file:
     st.session_state.setdefault("edited_premises", {})
     st.session_state.setdefault("edited_hypothesis", {})
     st.session_state.setdefault("edited_label", {})
+    edited_examples = {}
 
     for example in data:
         raw_id = example.get("id", "")
@@ -44,62 +45,80 @@ if uploaded_file:
         example["num_agree"] = num_agree
         example["model_votes"] = model_votes
 
-    tab_names = ["Tất cả"]
+    tab_groups = {
+        "🧠 Auto-assigned": [ex for ex in data if ex["override_type"] == "auto"],
+        "✍️ Manually assigned": [ex for ex in data if ex["override_type"] == "manual"
+                                 and ex["auto_label"] is not None and ex["label"] != ex["auto_label"]],
+        "✅ 3/3 models agree": [ex for ex in data if ex["num_agree"] == 3],
+        "⚠️ 2/3 models agree": [ex for ex in data if ex["num_agree"] == 2],
+        "❌ 1/3 or all different": [ex for ex in data if ex["num_agree"] <= 1],
+        "🟩 entailment": [ex for ex in data if ex["label"] == "entailment"],
+        "🟥 contradiction": [ex for ex in data if ex["label"] == "contradiction"],
+        "🟨 neutral": [ex for ex in data if ex["label"] == "neutral"],
+        "🟦 implicature": [ex for ex in data if ex["label"] == "implicature"],
+    }
+
+    tab_names = list(tab_groups.keys())
     tabs = st.tabs(tab_names)
 
-    with tabs[0]:
-        st.markdown(f"### 📊 Tổng số mẫu: {len(data)}")
-        index_key = "main_index"
-        st.session_state.setdefault(index_key, 0)
+    for i, tab_name in enumerate(tab_names):
+        subset = tab_groups[tab_name]
+        with tabs[i]:
+            st.markdown(f"### 📊 Số lượng mẫu: {len(subset)}")
+            index_key = f"{tab_name}_index"
+            st.session_state.setdefault(index_key, 0)
 
-        col1, col2 = st.columns([5, 5])
-        with col1:
-            search_id = st.text_input("🔎 Tìm theo ID", key="search_id")
-        with col2:
-            goto_page = st.number_input("🔢 Đi đến vị trí", 1, max(1, len(data)), 1, key="goto_index")
+            col1, col2, col3 = st.columns([4, 3, 3])
+            with col1:
+                search_id = st.text_input("🔎 Tìm theo ID", key=f"{tab_name}_search_id")
+            with col2:
+                max_page = max(1, len(subset))
+                default_goto = min(st.session_state.get(f"{tab_name}_goto_index", 1), max_page)
+                goto_page = st.number_input("🔢 Đi đến vị trí", 1, max_page, default_goto, key=f"{tab_name}_goto_index")
+            with col3:
+                if st.button("🚀 Tìm / Chuyển trang", key=f"{tab_name}_search_btn"):
+                    found = False
+                    if search_id:
+                        for idx, ex in enumerate(subset):
+                            if ex["clean_id"] == search_id:
+                                st.session_state[index_key] = idx
+                                st.success(f"🔍 Tìm thấy ID `{search_id}` ở vị trí {idx+1}/{len(subset)}")
+                                found = True
+                                break
+                        if not found:
+                            st.warning(f"⚠️ Không tìm thấy ID `{search_id}`.")
+                    else:
+                        st.session_state[index_key] = int(goto_page) - 1
 
-        if st.button("🚀 Tìm / Chuyển trang", key="search_btn"):
-            found = False
-            if search_id:
-                for idx, ex in enumerate(data):
-                    if ex["clean_id"] == search_id:
-                        st.session_state[index_key] = idx
-                        st.success(f"🔍 Tìm thấy ID `{search_id}` tại vị trí {idx+1}/{len(data)}")
-                        found = True
-                        break
-                if not found:
-                    st.warning("❌ Không tìm thấy ID.")
-            else:
-                st.session_state[index_key] = int(goto_page) - 1
+            if not subset:
+                st.info("Không có mẫu nào trong tab này.")
+                continue
 
-        if len(data) == 0:
-            st.info("Không có mẫu nào.")
-        else:
             nav_left, main_col, nav_right = st.columns([1, 10, 1])
             with nav_left:
-                if st.button("◀️", key="prev"):
+                if st.button("◀️", key=f"{tab_name}_prev"):
                     st.session_state[index_key] = max(0, st.session_state[index_key] - 1)
             with nav_right:
-                if st.button("▶️", key="next"):
-                    st.session_state[index_key] = min(len(data) - 1, st.session_state[index_key] + 1)
+                if st.button("▶️", key=f"{tab_name}_next"):
+                    st.session_state[index_key] = min(len(subset) - 1, st.session_state[index_key] + 1)
 
             current_index = st.session_state[index_key]
-            example = data[current_index]
+            example = subset[current_index]
 
             with main_col:
                 st.markdown("---")
-                st.markdown(f"🧾 **ID:** `{example['id']}` → `{example['clean_id']}` ({current_index+1}/{len(data)})")
+                st.markdown(f"🧾 **ID:** `{example['id']}` → `{example['clean_id']}` ({current_index+1}/{len(subset)})")
 
                 updated_premises = []
                 for j, p in enumerate(example.get("premises", [])):
-                    field_key = f"{example['clean_id']}_premise_{j}"
-                    edit_text_simple(f"Premise {j+1}:", field_key, p)
-                    updated_premises.append(st.session_state[field_key])
+                    field_key = f"{tab_name}_{example['clean_id']}_premise_{j}"
+                    val = edit_text_simple(f"Premise {j+1}:", field_key, p, height=80)
+                    updated_premises.append(val)
                 st.session_state["edited_premises"][example["clean_id"]] = updated_premises
 
-                hyp_key = f"{example['clean_id']}_hypothesis"
-                edit_text_simple("Hypothesis:", hyp_key, example.get("hypothesis", ""))
-                st.session_state["edited_hypothesis"][example["clean_id"]] = st.session_state[hyp_key]
+                hyp_key = f"{tab_name}_{example['clean_id']}_hypothesis"
+                edited_hyp = edit_text_simple("Hypothesis:", hyp_key, example.get("hypothesis", ""), height=100)
+                st.session_state["edited_hypothesis"][example["clean_id"]] = edited_hyp
 
                 st.markdown("#### 🧠 Model votes:")
                 for model, vote in example.get("model_votes", {}).items():
@@ -109,37 +128,48 @@ if uploaded_file:
                     override = st.selectbox(
                         "Chọn nhãn mới:",
                         ["", "entailment", "contradiction", "neutral", "implicature"],
-                        key=f"{example['clean_id']}_override"
+                        key=f"{tab_name}_{example['clean_id']}_override"
                     )
                     if override:
                         st.session_state["edited_label"][example["clean_id"]] = override
 
                 auto_label = example.get("auto_label")
-                final_label = st.session_state["edited_label"].get(example["clean_id"], auto_label or example["label"])
-                note = (
-                    " (auto-assigned)" if final_label == auto_label
-                    else " (overridden manually)" if auto_label
-                    else " (manual)"
+                current_label = st.session_state["edited_label"].get(example["clean_id"], auto_label or example["label"])
+                final_note = (
+                    " (no auto-assigned)" if auto_label is None
+                    else " (auto-assigned)" if current_label == auto_label
+                    else " (overridden manually)"
                 )
-                st.markdown(f"**👤 Final label:** `{final_label}`{note}")
 
-    # ✅ Ghi dữ liệu vào file khi export
+                col1, col2, col3 = st.columns(3)
+                col1.markdown(f"**🔖 Original label:** `{example.get('label', 'N/A')}`")
+                col2.markdown(f"**🤖 Auto-assigned:** `{auto_label or 'None'}`")
+                col3.markdown(f"**👤 Final label:** `{current_label}`{final_note}")
+
+    # ✅ Ghi vào file tải về
     with st.sidebar:
         for example in data:
             clean_id = example["clean_id"]
+
+            # Ghi đè Premises
             if clean_id in st.session_state["edited_premises"]:
                 example["premises"] = st.session_state["edited_premises"][clean_id]
+
+            # Ghi đè Hypothesis
             if clean_id in st.session_state["edited_hypothesis"]:
                 example["hypothesis"] = st.session_state["edited_hypothesis"][clean_id]
-            example["final_label"] = st.session_state["edited_label"].get(
-                clean_id, example.get("auto_label") or example.get("label")
-            )
+
+            # Ghi đè Label
+            final = st.session_state["edited_label"].get(clean_id, example.get("auto_label") or example.get("label"))
+            example["final_label"] = final
 
         json_str = json.dumps(data, ensure_ascii=False, indent=2)
         st.download_button("📥 Tải file kết quả", data=json_str.encode("utf-8"),
                            file_name=export_filename, mime="application/json")
+else:
+    st.info("📥 Vui lòng tải file JSON từ sidebar để bắt đầu.")
 
-# 🔁 Reload tự động sau 60 giây (giúp tránh ngắt session trên Streamlit Cloud)
+# 🔁 Reload sau 60 giây trên Streamlit Cloud (tuỳ chọn)
 if uploaded_file:
     time.sleep(60)
     st.rerun()
