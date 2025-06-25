@@ -8,8 +8,7 @@ def edit_text_simple(label: str, key: str, original_text: str, height=80):
     if key not in st.session_state:
         st.session_state[key] = original_text
     st.markdown(f"**{label}**")
-    st.text_area("", key=key, height=height, label_visibility="collapsed")
-    return st.session_state[key]
+    return st.text_area("", key=key, height=height, label_visibility="collapsed")
 
 st.set_page_config(page_title="Multihop NLI Label Review", layout="wide", initial_sidebar_state="expanded")
 
@@ -45,10 +44,10 @@ if uploaded_file:
 
     tab_groups = {
         "\U0001F9E0 Auto-assigned": [ex for ex in data if ex["override_type"] == "auto"],
-        "\u270D\ufe0f Manually assigned": [ex for ex in data if ex["override_type"] == "manual"
+        "✍️ Manually assigned": [ex for ex in data if ex["override_type"] == "manual"
                                      and ex["auto_label"] is not None and ex["label"] != ex["auto_label"]],
-        "\u2705 3/3 models agree": [ex for ex in data if ex["num_agree"] == 3],
-        "\u26A0\ufe0f 2/3 models agree": [ex for ex in data if ex["num_agree"] == 2],
+        "✅ 3/3 models agree": [ex for ex in data if ex["num_agree"] == 3],
+        "⚠️ 2/3 models agree": [ex for ex in data if ex["num_agree"] == 2],
         "❌ 1/3 or all different": [ex for ex in data if ex["num_agree"] <= 1],
         "\U0001F7E9 entailment": [ex for ex in data if ex["label"] == "entailment"],
         "\U0001F7E5 contradiction": [ex for ex in data if ex["label"] == "contradiction"],
@@ -84,7 +83,7 @@ if uploaded_file:
                                 found = True
                                 break
                         if not found:
-                            st.warning(f"\u26A0\ufe0f Không tìm thấy ID `{search_id}`.")
+                            st.warning(f"⚠️ Không tìm thấy ID `{search_id}`.")
                     else:
                         st.session_state[index_key] = int(goto_page) - 1
 
@@ -94,10 +93,10 @@ if uploaded_file:
 
             nav_left, main_col, nav_right = st.columns([1, 10, 1])
             with nav_left:
-                if st.button("\u25C0\ufe0f", key=f"{tab_name}_prev"):
+                if st.button("◀️", key=f"{tab_name}_prev"):
                     st.session_state[index_key] = max(0, st.session_state[index_key] - 1)
             with nav_right:
-                if st.button("\u25B6\ufe0f", key=f"{tab_name}_next"):
+                if st.button("▶️", key=f"{tab_name}_next"):
                     st.session_state[index_key] = min(len(subset) - 1, st.session_state[index_key] + 1)
 
             current_index = st.session_state[index_key]
@@ -110,20 +109,20 @@ if uploaded_file:
                 updated_premises = []
                 for j, p in enumerate(example.get("premises", [])):
                     field_key = f"{tab_name}_{example['clean_id']}_premise_{j}"
-                    edit_text_simple(f"Premise {j+1}:", field_key, p, height=80)
-                    updated_premises.append(st.session_state[field_key])
+                    edited_text = edit_text_simple(f"Premise {j+1}:", field_key, p, height=80)
+                    updated_premises.append(edited_text)
                 example["premises"] = updated_premises
 
                 hyp_key = f"{tab_name}_{example['clean_id']}_hypothesis"
                 original_hyp = example.get("hypothesis", "")
-                edit_text_simple("Hypothesis:", hyp_key, original_hyp, height=100)
-                example["hypothesis"] = st.session_state[hyp_key]
+                edited_hyp = edit_text_simple("Hypothesis:", hyp_key, original_hyp, height=100)
+                example["hypothesis"] = edited_hyp
 
                 st.markdown("#### \U0001F9E0 Model votes:")
                 for model, vote in example.get("model_votes", {}).items():
                     st.markdown(f"- `{model}` → **{vote}**")
 
-                with st.expander("\u270D\ufe0f Chỉnh nhãn thủ công"):
+                with st.expander("✍️ Chỉnh nhãn thủ công"):
                     override = st.selectbox(
                         "Chọn nhãn mới:",
                         ["", "entailment", "contradiction", "neutral", "implicature"],
