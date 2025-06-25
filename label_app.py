@@ -108,12 +108,12 @@ if uploaded_file:
 
                 updated_premises = []
                 for j, p in enumerate(example.get("premises", [])):
-                    field_key = f"{tab_name}_{example['clean_id']}_premise_{j}"
+                    field_key = f"{tab_name}_{example['clean_id']}_premise_{j}_{current_index}"
                     edited_text = edit_text_simple(f"Premise {j+1}:", field_key, p, height=80)
                     updated_premises.append(edited_text)
                 example["premises"] = updated_premises
 
-                hyp_key = f"{tab_name}_{example['clean_id']}_hypothesis"
+                hyp_key = f"{tab_name}_{example['clean_id']}_hypothesis_{current_index}"
                 original_hyp = example.get("hypothesis", "")
                 edited_hyp = edit_text_simple("Hypothesis:", hyp_key, original_hyp, height=100)
                 example["hypothesis"] = edited_hyp
@@ -123,11 +123,9 @@ if uploaded_file:
                     st.markdown(f"- `{model}` → **{vote}**")
 
                 with st.expander("✍️ Chỉnh nhãn thủ công"):
-                    override_key = f"{tab_name}_{example['clean_id']}_override"
-                    current_override = st.session_state.get(
-                        "edited_label", {}).get(
-                        example["clean_id"],
-                        example.get("auto_label") or example.get("label")
+                    override_key = f"{tab_name}_{example['clean_id']}_override_{current_index}"
+                    current_override = st.session_state.get("edited_label", {}).get(
+                        example["clean_id"], example.get("auto_label") or example.get("label")
                     )
                     override = st.selectbox(
                         "Chọn nhãn mới:",
