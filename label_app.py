@@ -18,6 +18,9 @@ if uploaded_file:
         if k not in st.session_state:
             st.session_state[k] = ""
 
+    if "current_page" not in st.session_state:
+        st.session_state.current_page = 1
+
     def parse_id(example_id):
         try:
             return example_id.split("_")[-2] + "_" + example_id.split("_")[-1]
@@ -54,25 +57,37 @@ if uploaded_file:
     # Bộ lọc
     st.sidebar.header("🎛️ Bộ lọc")
 
-    st.session_state.filter_by_id = st.sidebar.text_input("🔍 Search by ID (parsed)", value=st.session_state.filter_by_id)
+    new_id = st.sidebar.text_input("🔍 Search by ID (parsed)", value=st.session_state.filter_by_id)
+    if new_id != st.session_state.filter_by_id:
+        st.session_state.current_page = 1
+    st.session_state.filter_by_id = new_id
 
-    st.session_state.filter_by_label = st.sidebar.selectbox(
+    new_label = st.sidebar.selectbox(
         "🧠 Auto Label",
         ["", "entailment", "contradiction", "neutral", "implicature"],
         index=["", "entailment", "contradiction", "neutral", "implicature"].index(st.session_state.filter_by_label)
     )
+    if new_label != st.session_state.filter_by_label:
+        st.session_state.current_page = 1
+    st.session_state.filter_by_label = new_label
 
-    st.session_state.filter_by_agreement = st.sidebar.selectbox(
+    new_agree = st.sidebar.selectbox(
         "🤝 Agreement",
         ["", "3/3", "2/3", "1/3"],
         index=["", "3/3", "2/3", "1/3"].index(st.session_state.filter_by_agreement)
     )
+    if new_agree != st.session_state.filter_by_agreement:
+        st.session_state.current_page = 1
+    st.session_state.filter_by_agreement = new_agree
 
-    st.session_state.filter_by_assign_type = st.sidebar.selectbox(
+    new_assign = st.sidebar.selectbox(
         "✍️ Assign Type",
         ["", "Auto", "Manual"],
         index=["", "Auto", "Manual"].index(st.session_state.filter_by_assign_type)
     )
+    if new_assign != st.session_state.filter_by_assign_type:
+        st.session_state.current_page = 1
+    st.session_state.filter_by_assign_type = new_assign
 
     # Lọc dữ liệu
     filtered_data = []
@@ -93,11 +108,10 @@ if uploaded_file:
     # Phân trang
     per_page = 10
     total_pages = math.ceil(len(filtered_data) / per_page)
-    page = st.sidebar.number_input("📄 Page", min_value=1, max_value=max(total_pages, 1), value=1, step=1)
+    st.markdown(f"🎯 Đã lọc được **{len(filtered_data)}** mẫu phù hợp. Trang hiện tại: **{st.session_state.current_page}/{total_pages}**")
 
-    start_idx = (page - 1) * per_page
+    start_idx = (st.session_state.current_page - 1) * per_page
     end_idx = start_idx + per_page
-
     page_data = filtered_data[start_idx:end_idx]
 
     if not page_data:
@@ -108,12 +122,10 @@ if uploaded_file:
             st.markdown(f"### 🧾 Sample {start_idx + idx + 1}: `{ex_id}`")
             st.markdown(f"**Parsed ID:** `{st.session_state.id[ex_id]}`")
 
-            # Premise edit
             default_premises = "\n".join(ex.get("premises", []))
             premises_input = st.text_area(f"📌 Premises (multi-line)", value=st.session_state.edited_premises.get(ex_id, default_premises), height=100, key=f"premises_{ex_id}")
             st.session_state.edited_premises[ex_id] = premises_input
 
-            # Hypothesis edit
             default_hypo = ex.get("hypothesis", "")
             hypo_input = st.text_input("🎯 Hypothesis", value=st.session_state.edited_hypothesis.get(ex_id, default_hypo), key=f"hypo_{ex_id}")
             st.session_state.edited_hypothesis[ex_id] = hypo_input
@@ -131,6 +143,15 @@ if uploaded_file:
                 st.session_state.assign_type[ex_id] = "Manual"
                 st.success(f"Gán `{label}` cho ID {ex_id} thành công!")
 
+        # Điều hướng trang
+        st.divider()
+        cols = st.columns(min(total_pages, 10))
+        for i in range(total_pages):
+            col = cols[i % 10]
+            if col.button(f"{i+1}", key=f"page_{i+1}"):
+                st.session_state.current_page = i + 1
+                st.experimental_rerun()
+
     # Tải kết quả
     if st.button("📥 Tải xuống kết quả"):
         export = []
@@ -141,7 +162,6 @@ if uploaded_file:
             ex["assign_type"] = st.session_state.assign_type.get(ex_id, "Auto")
             ex["agreement"] = st.session_state.agreement.get(ex_id)
 
-            # Update text fields
             edited_hypo = st.session_state.edited_hypothesis.get(ex_id)
             if edited_hypo is not None:
                 ex["hypothesis"] = edited_hypo
