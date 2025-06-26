@@ -58,7 +58,7 @@ if uploaded_file:
     st.session_state.filter_by_id = st.sidebar.text_input("🔍 Search by ID (parsed)", value=st.session_state.filter_by_id)
 
     st.session_state.filter_by_label = st.sidebar.selectbox(
-        "🧠 Auto Label",
+        "🧠 Label",
         ["", "entailment", "contradiction", "neutral", "implicature"],
         index=["", "entailment", "contradiction", "neutral", "implicature"].index(st.session_state.filter_by_label)
     )
