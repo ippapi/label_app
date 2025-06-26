@@ -155,8 +155,14 @@ if uploaded_file:
             start = max(1, end - max_buttons + 1)
 
         for i, page_num in enumerate(range(start, end + 1)):
-            if nav_cols[i + 1].button(f"{page_num}", key=f"pg_{page_num}"):
-                change_page(page_num)
+            if page_num == current_page:
+                nav_cols[i + 1].markdown(
+                    f"<div style='padding: 0.4em 1em; border-radius: 6px; background-color: #0066cc; color: white; text-align: center; font-weight: bold;'>{page_num}</div>",
+                    unsafe_allow_html=True
+                )
+            else:
+                if nav_cols[i + 1].button(f"{page_num}", key=f"pg_{page_num}"):
+                    change_page(page_num)
 
         if current_page < total_pages:
             if nav_cols[8].button("»"):
