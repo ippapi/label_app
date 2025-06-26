@@ -10,6 +10,7 @@ uploaded_file = st.file_uploader("📤 Upload a JSON file", type="json")
 if uploaded_file:
     data = json.load(uploaded_file)
 
+    # Init session state
     for key in ["assign_type", "final_label", "auto_label", "agreement", "id", "edited_premises", "edited_hypothesis"]:
         if key not in st.session_state:
             st.session_state[key] = {}
@@ -17,9 +18,6 @@ if uploaded_file:
     for k in ["filter_by_assign_type", "filter_by_agreement", "filter_by_label", "filter_by_id"]:
         if k not in st.session_state:
             st.session_state[k] = ""
-
-    if "current_page" not in st.session_state:
-        st.session_state.current_page = 1
 
     def parse_id(example_id):
         try:
@@ -57,37 +55,25 @@ if uploaded_file:
     # Bộ lọc
     st.sidebar.header("🎛️ Bộ lọc")
 
-    new_id = st.sidebar.text_input("🔍 Search by ID (parsed)", value=st.session_state.filter_by_id)
-    if new_id != st.session_state.filter_by_id:
-        st.session_state.current_page = 1
-    st.session_state.filter_by_id = new_id
+    st.session_state.filter_by_id = st.sidebar.text_input("🔍 Search by ID (parsed)", value=st.session_state.filter_by_id)
 
-    new_label = st.sidebar.selectbox(
+    st.session_state.filter_by_label = st.sidebar.selectbox(
         "🧠 Auto Label",
         ["", "entailment", "contradiction", "neutral", "implicature"],
         index=["", "entailment", "contradiction", "neutral", "implicature"].index(st.session_state.filter_by_label)
     )
-    if new_label != st.session_state.filter_by_label:
-        st.session_state.current_page = 1
-    st.session_state.filter_by_label = new_label
 
-    new_agree = st.sidebar.selectbox(
+    st.session_state.filter_by_agreement = st.sidebar.selectbox(
         "🤝 Agreement",
         ["", "3/3", "2/3", "1/3"],
         index=["", "3/3", "2/3", "1/3"].index(st.session_state.filter_by_agreement)
     )
-    if new_agree != st.session_state.filter_by_agreement:
-        st.session_state.current_page = 1
-    st.session_state.filter_by_agreement = new_agree
 
-    new_assign = st.sidebar.selectbox(
+    st.session_state.filter_by_assign_type = st.sidebar.selectbox(
         "✍️ Assign Type",
         ["", "Auto", "Manual"],
         index=["", "Auto", "Manual"].index(st.session_state.filter_by_assign_type)
     )
-    if new_assign != st.session_state.filter_by_assign_type:
-        st.session_state.current_page = 1
-    st.session_state.filter_by_assign_type = new_assign
 
     # Lọc dữ liệu
     filtered_data = []
@@ -106,11 +92,15 @@ if uploaded_file:
         filtered_data.append(ex)
 
     # Phân trang
-    per_page = 10
+    per_page = 5
     total_pages = math.ceil(len(filtered_data) / per_page)
-    st.markdown(f"🎯 Đã lọc được **{len(filtered_data)}** mẫu phù hợp. Trang hiện tại: **{st.session_state.current_page}/{total_pages}**")
+    if "current_page" not in st.session_state:
+        st.session_state.current_page = 1
+    current_page = st.session_state.current_page
 
-    start_idx = (st.session_state.current_page - 1) * per_page
+    st.markdown(f"🎯 Đã lọc được **{len(filtered_data)}** mẫu phù hợp. Trang hiện tại: **{current_page}/{total_pages}**")
+
+    start_idx = (current_page - 1) * per_page
     end_idx = start_idx + per_page
     page_data = filtered_data[start_idx:end_idx]
 
@@ -145,14 +135,36 @@ if uploaded_file:
 
         # Điều hướng trang
         st.divider()
-        cols = st.columns(min(total_pages, 10))
-        for i in range(total_pages):
-            col = cols[i % 10]
-            if col.button(f"{i+1}", key=f"page_{i+1}"):
-                st.session_state.current_page = i + 1
-                st.experimental_rerun()
+        nav_cols = st.columns(9)
 
-    # Tải kết quả
+        def change_page(new_page):
+            st.session_state.current_page = new_page
+            st.experimental_rerun()
+
+        if current_page > 1:
+            if nav_cols[0].button("«"):
+                change_page(current_page - 1)
+        else:
+            nav_cols[0].write("")
+
+        max_buttons = 7
+        half = max_buttons // 2
+        start = max(1, current_page - half)
+        end = min(total_pages, start + max_buttons - 1)
+        if end - start < max_buttons:
+            start = max(1, end - max_buttons + 1)
+
+        for i, page_num in enumerate(range(start, end + 1)):
+            if nav_cols[i + 1].button(f"{page_num}", key=f"pg_{page_num}"):
+                change_page(page_num)
+
+        if current_page < total_pages:
+            if nav_cols[8].button("»"):
+                change_page(current_page + 1)
+        else:
+            nav_cols[8].write("")
+
+    # Xuất file
     if st.button("📥 Tải xuống kết quả"):
         export = []
         for ex in data:
@@ -162,6 +174,7 @@ if uploaded_file:
             ex["assign_type"] = st.session_state.assign_type.get(ex_id, "Auto")
             ex["agreement"] = st.session_state.agreement.get(ex_id)
 
+            # Update văn bản
             edited_hypo = st.session_state.edited_hypothesis.get(ex_id)
             if edited_hypo is not None:
                 ex["hypothesis"] = edited_hypo
