@@ -102,14 +102,9 @@ if uploaded_file:
 
         st.markdown(f"**ID**: `{ex_id}`")
         st.markdown(f"**Parsed ID**: `{st.session_state.id[ex_id]}`")
-
-        # ✅ Hiển thị Premises (list)
         st.markdown("**Premises:**")
-        if isinstance(ex.get("premises"), list):
-            for i, p in enumerate(ex["premises"], 1):
-                st.markdown(f"- {i}. {p}")
-        else:
-            st.markdown(f"- {ex.get('premise', '(Không có premise)')}")
+        for i, p in enumerate(ex.get("premises", []), 1):
+            st.markdown(f"- {i}. {p}")
 
         st.markdown(f"**Hypothesis:** {ex['hypothesis']}")
         st.markdown(f"**Auto label:** `{st.session_state.auto_label[ex_id]}`")
