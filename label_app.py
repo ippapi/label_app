@@ -109,49 +109,50 @@ if uploaded_file:
     else:
         for idx, ex in enumerate(page_data):
             ex_id = ex["id"]
-            st.markdown(f"### 🧾 Sample {start_idx + idx + 1}: `{ex_id}`")
-            st.markdown(f"**Parsed ID:** `{st.session_state.id[ex_id]}`")
-
-            # --- Premises: mỗi dòng 1 input ---
-            edited_premises = st.session_state.edited_premises.get(ex_id, ex.get("premises", []))
-            if not isinstance(edited_premises, list):
-                edited_premises = [p.strip() for p in edited_premises.strip().split("\n") if p.strip()]
-            st.session_state.edited_premises[ex_id] = edited_premises
-
-            new_premises = []
-            st.markdown("📌 **Premises**:")
-            for i, p in enumerate(edited_premises or [""]):
-                updated = st.text_area(f"Premise {i+1}", value=p, key=f"{ex_id}_premise_{i}", height=68)
-                new_premises.append(updated)
-            if st.button(f"➕ Thêm premise", key=f"add_premise_{ex_id}"):
-                new_premises.append("")
-            st.session_state.edited_premises[ex_id] = new_premises
-
-            # --- Hypothesis ---
-            default_hypo = ex.get("hypothesis", "")
-            hypo_input = st.text_area("🎯 Hypothesis", value=st.session_state.edited_hypothesis.get(ex_id, default_hypo), key=f"hypo_{ex_id}", height=68)
-            st.session_state.edited_hypothesis[ex_id] = hypo_input
-
-            st.markdown(f"**Auto label:** `{st.session_state.auto_label[ex_id]}`")
-            st.markdown(f"**Agreement:** `{st.session_state.agreement[ex_id]}`")
-            st.markdown("**🧠 Các nhãn từ mô hình:**")
-            model_labels = {k: v for k, v in ex.items() if k.endswith("_validated")}
-            if model_labels:
-                for model_name, label_val in model_labels.items():
-                    st.markdown(f"- `{model_name}`: **{label_val}**")
-            else:
-                st.info("Không có nhãn mô hình.")
-
-
-            label = st.radio("🏷️ Gán nhãn", ["entailment", "contradiction", "neutral", "implicature"],
-                             index=["entailment", "contradiction", "neutral", "implicature"].index(
-                                 st.session_state.final_label.get(ex_id, st.session_state.auto_label[ex_id]) or "entailment"
-                             ), horizontal=True, key=f"label_{ex_id}")
-
-            if st.button("✅ Lưu nhãn", key=f"save_{ex_id}"):
-                st.session_state.final_label[ex_id] = label
-                st.session_state.assign_type[ex_id] = "Manual"
-                st.success(f"Gán `{label}` cho ID {ex_id} thành công!")
+            with st.container():
+                st.markdown(f"### 🧾 Sample {start_idx + idx + 1}: `{ex_id}`")
+                st.markdown(f"**Parsed ID:** `{st.session_state.id[ex_id]}`")
+    
+                # --- Premises: mỗi dòng 1 input ---
+                edited_premises = st.session_state.edited_premises.get(ex_id, ex.get("premises", []))
+                if not isinstance(edited_premises, list):
+                    edited_premises = [p.strip() for p in edited_premises.strip().split("\n") if p.strip()]
+                st.session_state.edited_premises[ex_id] = edited_premises
+    
+                new_premises = []
+                st.markdown("📌 **Premises**:")
+                for i, p in enumerate(edited_premises or [""]):
+                    updated = st.text_area(f"Premise {i+1}", value=p, key=f"{ex_id}_premise_{i}", height=68)
+                    new_premises.append(updated)
+                if st.button(f"➕ Thêm premise", key=f"add_premise_{ex_id}"):
+                    new_premises.append("")
+                st.session_state.edited_premises[ex_id] = new_premises
+    
+                # --- Hypothesis ---
+                default_hypo = ex.get("hypothesis", "")
+                hypo_input = st.text_area("🎯 Hypothesis", value=st.session_state.edited_hypothesis.get(ex_id, default_hypo), key=f"hypo_{ex_id}", height=68)
+                st.session_state.edited_hypothesis[ex_id] = hypo_input
+    
+                st.markdown(f"**Auto label:** `{st.session_state.auto_label[ex_id]}`")
+                st.markdown(f"**Agreement:** `{st.session_state.agreement[ex_id]}`")
+                st.markdown("**🧠 Các nhãn từ mô hình:**")
+                model_labels = {k: v for k, v in ex.items() if k.endswith("_validated")}
+                if model_labels:
+                    for model_name, label_val in model_labels.items():
+                        st.markdown(f"- `{model_name}`: **{label_val}**")
+                else:
+                    st.info("Không có nhãn mô hình.")
+    
+    
+                label = st.radio("🏷️ Gán nhãn", ["entailment", "contradiction", "neutral", "implicature"],
+                                 index=["entailment", "contradiction", "neutral", "implicature"].index(
+                                     st.session_state.final_label.get(ex_id, st.session_state.auto_label[ex_id]) or "entailment"
+                                 ), horizontal=True, key=f"label_{ex_id}")
+    
+                if st.button("✅ Lưu nhãn", key=f"save_{ex_id}"):
+                    st.session_state.final_label[ex_id] = label
+                    st.session_state.assign_type[ex_id] = "Manual"
+                    st.success(f"Gán `{label}` cho ID {ex_id} thành công!")
 
         # Điều hướng trang
         st.divider()
