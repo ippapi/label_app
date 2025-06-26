@@ -110,6 +110,7 @@ if uploaded_file:
         for idx, ex in enumerate(page_data):
             ex_id = ex["id"]
             with st.container():
+                st.markdown("---")
                 st.markdown(f"### 🧾 Sample {start_idx + idx + 1}: `{ex_id}`")
                 st.markdown(f"**Parsed ID:** `{st.session_state.id[ex_id]}`")
     
