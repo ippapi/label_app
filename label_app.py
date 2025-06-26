@@ -157,7 +157,7 @@ if uploaded_file:
         for i, page_num in enumerate(range(start, end + 1)):
             if page_num == current_page:
                 nav_cols[i + 1].markdown(
-                    f"<div style='padding: 0.4em 1em; border-radius: 6px; background-color: #0066cc; color: white; text-align: center; font-weight: bold;'>{page_num}</div>",
+                    f"<div style='border-radius: 6px; background-color: #0066cc; color: white; font-weight: bold;'>{page_num}</div>",
                     unsafe_allow_html=True
                 )
             else:
