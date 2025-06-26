@@ -1,5 +1,6 @@
 import streamlit as st
 import json
+import math
 
 st.set_page_config(page_title="NLI Labeling Tool", layout="wide")
 st.title("🧠 NLI JSON Labeling Tool")
@@ -9,8 +10,7 @@ uploaded_file = st.file_uploader("📤 Upload a JSON file", type="json")
 if uploaded_file:
     data = json.load(uploaded_file)
 
-    # 🧠 Init session state
-    for key in ["assign_type", "final_label", "auto_label", "agreement", "id"]:
+    for key in ["assign_type", "final_label", "auto_label", "agreement", "id", "edited_premises", "edited_hypothesis"]:
         if key not in st.session_state:
             st.session_state[key] = {}
 
@@ -45,15 +45,13 @@ if uploaded_file:
             return "2/3"
         return "1/3"
 
-    # Tính auto_label, agreement, parsed_id
     for ex in data:
         ex_id = ex["id"]
-        parsed = parse_id(ex_id)
-        st.session_state.id[ex_id] = parsed
+        st.session_state.id[ex_id] = parse_id(ex_id)
         st.session_state.auto_label[ex_id] = compute_auto_label(ex)
         st.session_state.agreement[ex_id] = compute_agreement(ex)
 
-    # --- UI filter ---
+    # Bộ lọc
     st.sidebar.header("🎛️ Bộ lọc")
 
     st.session_state.filter_by_id = st.sidebar.text_input("🔍 Search by ID (parsed)", value=st.session_state.filter_by_id)
@@ -76,7 +74,7 @@ if uploaded_file:
         index=["", "Auto", "Manual"].index(st.session_state.filter_by_assign_type)
     )
 
-    # --- Filter Data ---
+    # Lọc dữ liệu
     filtered_data = []
     for ex in data:
         ex_id = ex["id"]
@@ -92,35 +90,48 @@ if uploaded_file:
                 continue
         filtered_data.append(ex)
 
-    # --- Hiển thị và gán nhãn ---
-    if not filtered_data:
+    # Phân trang
+    per_page = 10
+    total_pages = math.ceil(len(filtered_data) / per_page)
+    page = st.sidebar.number_input("📄 Page", min_value=1, max_value=max(total_pages, 1), value=1, step=1)
+
+    start_idx = (page - 1) * per_page
+    end_idx = start_idx + per_page
+
+    page_data = filtered_data[start_idx:end_idx]
+
+    if not page_data:
         st.warning("⚠️ Không có mẫu nào khớp với bộ lọc.")
     else:
-        selected = st.number_input("🔢 Chọn mẫu", 0, len(filtered_data)-1, 0)
-        ex = filtered_data[selected]
-        ex_id = ex["id"]
+        for idx, ex in enumerate(page_data):
+            ex_id = ex["id"]
+            st.markdown(f"### 🧾 Sample {start_idx + idx + 1}: `{ex_id}`")
+            st.markdown(f"**Parsed ID:** `{st.session_state.id[ex_id]}`")
 
-        st.markdown(f"**ID**: `{ex_id}`")
-        st.markdown(f"**Parsed ID**: `{st.session_state.id[ex_id]}`")
-        st.markdown("**Premises:**")
-        for i, p in enumerate(ex.get("premises", []), 1):
-            st.markdown(f"- {i}. {p}")
+            # Premise edit
+            default_premises = "\n".join(ex.get("premises", []))
+            premises_input = st.text_area(f"📌 Premises (multi-line)", value=st.session_state.edited_premises.get(ex_id, default_premises), height=100, key=f"premises_{ex_id}")
+            st.session_state.edited_premises[ex_id] = premises_input
 
-        st.markdown(f"**Hypothesis:** {ex['hypothesis']}")
-        st.markdown(f"**Auto label:** `{st.session_state.auto_label[ex_id]}`")
-        st.markdown(f"**Agreement:** `{st.session_state.agreement[ex_id]}`")
+            # Hypothesis edit
+            default_hypo = ex.get("hypothesis", "")
+            hypo_input = st.text_input("🎯 Hypothesis", value=st.session_state.edited_hypothesis.get(ex_id, default_hypo), key=f"hypo_{ex_id}")
+            st.session_state.edited_hypothesis[ex_id] = hypo_input
 
-        label = st.radio("🎯 Gán nhãn thủ công", ["entailment", "contradiction", "neutral", "implicature"],
-                         index=["entailment", "contradiction", "neutral", "implicature"].index(
-                             st.session_state.final_label.get(ex_id, st.session_state.auto_label[ex_id]) or "entailment"
-                         ))
+            st.markdown(f"**Auto label:** `{st.session_state.auto_label[ex_id]}`")
+            st.markdown(f"**Agreement:** `{st.session_state.agreement[ex_id]}`")
 
-        if st.button("✅ Lưu nhãn"):
-            st.session_state.final_label[ex_id] = label
-            st.session_state.assign_type[ex_id] = "Manual"
-            st.success(f"✅ Đã gán `{label}` cho ID {ex_id}")
+            label = st.radio("🏷️ Gán nhãn", ["entailment", "contradiction", "neutral", "implicature"],
+                             index=["entailment", "contradiction", "neutral", "implicature"].index(
+                                 st.session_state.final_label.get(ex_id, st.session_state.auto_label[ex_id]) or "entailment"
+                             ), horizontal=True, key=f"label_{ex_id}")
 
-    # --- Xuất file ---
+            if st.button("✅ Lưu nhãn", key=f"save_{ex_id}"):
+                st.session_state.final_label[ex_id] = label
+                st.session_state.assign_type[ex_id] = "Manual"
+                st.success(f"Gán `{label}` cho ID {ex_id} thành công!")
+
+    # Tải kết quả
     if st.button("📥 Tải xuống kết quả"):
         export = []
         for ex in data:
@@ -129,6 +140,17 @@ if uploaded_file:
             ex["final_label"] = st.session_state.final_label.get(ex_id, ex.get("auto_label"))
             ex["assign_type"] = st.session_state.assign_type.get(ex_id, "Auto")
             ex["agreement"] = st.session_state.agreement.get(ex_id)
+
+            # Update text fields
+            edited_hypo = st.session_state.edited_hypothesis.get(ex_id)
+            if edited_hypo is not None:
+                ex["hypothesis"] = edited_hypo
+
+            edited_premises = st.session_state.edited_premises.get(ex_id)
+            if edited_premises is not None:
+                ex["premises"] = [p.strip() for p in edited_premises.strip().split("\n") if p.strip()]
+
             export.append(ex)
+
         json_str = json.dumps(export, indent=2, ensure_ascii=False)
         st.download_button("📄 Tải file kết quả", json_str, file_name="labeled_output.json", mime="application/json")
