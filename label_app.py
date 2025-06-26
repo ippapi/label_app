@@ -161,7 +161,7 @@ if uploaded_file:
 
         def change_page(new_page):
             st.session_state.current_page = new_page
-            st.experimental_rerun()
+            st.rerun()
 
         if current_page > 1:
             if nav_cols[0].button("«"):
