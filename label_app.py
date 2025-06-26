@@ -121,7 +121,7 @@ if uploaded_file:
             new_premises = []
             st.markdown("📌 **Premises**:")
             for i, p in enumerate(edited_premises or [""]):
-                updated = st.text_input(f"Premise {i+1}", value=p, key=f"{ex_id}_premise_{i}", height=60)
+                updated = st.text_area(f"Premise {i+1}", value=p, key=f"{ex_id}_premise_{i}", height=60)
                 new_premises.append(updated)
             if st.button(f"➕ Thêm premise", key=f"add_premise_{ex_id}"):
                 new_premises.append("")
@@ -129,7 +129,7 @@ if uploaded_file:
 
             # --- Hypothesis ---
             default_hypo = ex.get("hypothesis", "")
-            hypo_input = st.text_input("🎯 Hypothesis", value=st.session_state.edited_hypothesis.get(ex_id, default_hypo), key=f"hypo_{ex_id}", height=60)
+            hypo_input = st.text_area("🎯 Hypothesis", value=st.session_state.edited_hypothesis.get(ex_id, default_hypo), key=f"hypo_{ex_id}", height=60)
             st.session_state.edited_hypothesis[ex_id] = hypo_input
 
             st.markdown(f"**Auto label:** `{st.session_state.auto_label[ex_id]}`")
