@@ -1,73 +1,90 @@
-
 import streamlit as st
 import json
-import re
-from collections import Counter
-import time
 
-def edit_text_simple(label: str, key: str, original_text: str, height=80):
-    current_value = st.session_state.get(key, original_text)
-    st.markdown(f"**{label}**")
-    updated = st.text_area("", value=current_value, key=key, height=height, label_visibility="collapsed")
-    return updated
+st.set_page_config(page_title="JSON Labeling Tool", layout="wide")
+st.title("🧠 JSON Labeling Tool with Filter")
 
-st.set_page_config(page_title="Multihop NLI Label Review", layout="wide", initial_sidebar_state="expanded")
-
-with st.sidebar:
-    st.title("📂 File dữ liệu")
-    uploaded_file = st.file_uploader("📤 Tải file JSON", type=["json"])
-    export_filename = st.text_input("💾 Tên file xuất (.json)", value="updated_labeled.json")
+# Upload file
+uploaded_file = st.file_uploader("📤 Upload a JSON file", type="json")
 
 if uploaded_file:
-    data = json.load(uploaded_file)
-    st.session_state.setdefault("edited_label", {})
-    edited_examples = {}
+    raw_data = json.load(uploaded_file)
 
-    for example in data:
-        raw_id = example.get("id", "")
-        match = re.search(r'_(\d+)$', raw_id)
-        clean_id = match.group(1) if match else raw_id
-        example["clean_id"] = example.get("clean_id", clean_id)
+    # Load state
+    if "final_labels" not in st.session_state:
+        st.session_state.final_labels = {}
+    if "filter_option" not in st.session_state:
+        st.session_state.filter_option = "Chưa gán"
 
-        validated_labels = {
-            k: v.strip().lower() for k, v in example.items()
-            if k.endswith("_validated") and isinstance(v, str)
-        }
-        label_counts = Counter(validated_labels.values())
-        model_votes = {k.split("/")[-2]: v.strip().lower() for k, v in validated_labels.items()}
-        most_common = label_counts.most_common(1)
-        auto_label = most_common[0][0] if most_common and most_common[0][1] >= 2 else None
-        num_agree = most_common[0][1] if most_common else 0
+    # Select filter
+    filter_option = st.selectbox(
+        "📊 Filter samples by label status:",
+        ["Tất cả", "Đã gán", "Chưa gán"],
+        index=["Tất cả", "Đã gán", "Chưa gán"].index(st.session_state.filter_option)
+    )
+    st.session_state.filter_option = filter_option
 
-        example["label"] = example.get("label", "")
-        if clean_id in st.session_state["edited_label"]:
-            final_label = st.session_state["edited_label"][clean_id]
-            override_type = "manual"
-        elif auto_label:
-            final_label = auto_label
-            override_type = "auto"
-        else:
-            final_label = None
-            override_type = "manual"
+    # Apply filter
+    def is_labeled(item):
+        return item["id"] in st.session_state.final_labels
 
-        example["override_type"] = override_type
-        example["original_label"] = example.get("original_label", example.get("label", "unknown"))
-        example["auto_label"] = auto_label
-        example["num_agree"] = num_agree
-        example["model_votes"] = model_votes
-        example["final_label"] = final_label
+    if filter_option == "Tất cả":
+        filtered_data = raw_data
+    elif filter_option == "Đã gán":
+        filtered_data = [item for item in raw_data if is_labeled(item)]
+    else:  # Chưa gán
+        filtered_data = [item for item in raw_data if not is_labeled(item)]
 
-    st.write("✅ File loaded và auto-label/final-label đã tính xong!")
+    if not filtered_data:
+        st.info("Không có mẫu nào phù hợp với bộ lọc.")
+    else:
+        # Select sample
+        selected_idx = st.number_input(
+            f"🧾 Chọn mẫu (0 đến {len(filtered_data) - 1})", min_value=0, max_value=len(filtered_data) - 1, step=1
+        )
+        current_item = filtered_data[selected_idx]
+        item_id = current_item["id"]
 
-    tab_groups = {
-        "🧠 Auto-assigned": [ex for ex in data if ex["override_type"] == "auto"],
-        "✍️ Manually assigned": [ex for ex in data if ex["override_type"] == "manual"],
-    }
+        st.subheader(f"Mẫu ID: {item_id}")
+        st.markdown(f"**Premise:** {current_item['premise']}")
+        st.markdown(f"**Hypothesis:** {current_item['hypothesis']}")
 
-    for tab_name, examples in tab_groups.items():
-        st.markdown(f"### {tab_name} — {len(examples)} mẫu")
-        for ex in examples[:5]:
-            st.markdown(f"- `{ex['id']}` → **{ex['final_label']}**")
+        current_label = st.session_state.final_labels.get(item_id, None)
 
-else:
-    st.info("📥 Vui lòng tải file JSON từ sidebar để bắt đầu.")
+        label = st.radio(
+            "🎯 Gán nhãn:",
+            ["entailment", "neutral", "contradiction"],
+            index=["entailment", "neutral", "contradiction"].index(current_label) if current_label else 0
+        )
+
+        if st.button("💾 Lưu nhãn"):
+            st.session_state.final_labels[item_id] = label
+            st.success(f"✅ Đã lưu nhãn cho ID {item_id}: {label}")
+
+        # Xem kết quả
+        st.markdown("---")
+        if st.checkbox("📋 Xem toàn bộ nhãn đã gán"):
+            labeled_items = [
+                {
+                    **item,
+                    "final_label": st.session_state.final_labels[item["id"]]
+                }
+                for item in raw_data
+                if item["id"] in st.session_state.final_labels
+            ]
+            st.json(labeled_items)
+
+        # Xuất file kết quả
+        if st.button("📥 Tải xuống file JSON đã gán nhãn"):
+            result = []
+            for item in raw_data:
+                item_copy = item.copy()
+                item_copy["final_label"] = st.session_state.final_labels.get(item["id"], "")
+                result.append(item_copy)
+            json_str = json.dumps(result, indent=2, ensure_ascii=False)
+            st.download_button(
+                label="📥 Tải file kết quả",
+                data=json_str,
+                file_name="labeled_data.json",
+                mime="application/json"
+            )
