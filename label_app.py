@@ -134,6 +134,14 @@ if uploaded_file:
 
             st.markdown(f"**Auto label:** `{st.session_state.auto_label[ex_id]}`")
             st.markdown(f"**Agreement:** `{st.session_state.agreement[ex_id]}`")
+            st.markdown("**🧠 Các nhãn từ mô hình:**")
+            model_labels = {k: v for k, v in ex.items() if k.endswith("_validated")}
+            if model_labels:
+                for model_name, label_val in model_labels.items():
+                    st.markdown(f"- `{model_name}`: **{label_val}**")
+            else:
+                st.info("Không có nhãn mô hình.")
+
 
             label = st.radio("🏷️ Gán nhãn", ["entailment", "contradiction", "neutral", "implicature"],
                              index=["entailment", "contradiction", "neutral", "implicature"].index(
