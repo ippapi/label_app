@@ -112,10 +112,22 @@ if uploaded_file:
             st.markdown(f"### 🧾 Sample {start_idx + idx + 1}: `{ex_id}`")
             st.markdown(f"**Parsed ID:** `{st.session_state.id[ex_id]}`")
 
-            default_premises = "\n".join(ex.get("premises", []))
-            premises_input = st.text_area(f"📌 Premises (multi-line)", value=st.session_state.edited_premises.get(ex_id, default_premises), height=100, key=f"premises_{ex_id}")
-            st.session_state.edited_premises[ex_id] = premises_input
+            # --- Premises: mỗi dòng 1 input ---
+            edited_premises = st.session_state.edited_premises.get(ex_id, ex.get("premises", []))
+            if not isinstance(edited_premises, list):
+                edited_premises = [p.strip() for p in edited_premises.strip().split("\n") if p.strip()]
+            st.session_state.edited_premises[ex_id] = edited_premises
 
+            new_premises = []
+            st.markdown("📌 **Premises**:")
+            for i, p in enumerate(edited_premises or [""]):
+                updated = st.text_input(f"Premise {i+1}", value=p, key=f"{ex_id}_premise_{i}")
+                new_premises.append(updated)
+            if st.button(f"➕ Thêm premise", key=f"add_premise_{ex_id}"):
+                new_premises.append("")
+            st.session_state.edited_premises[ex_id] = new_premises
+
+            # --- Hypothesis ---
             default_hypo = ex.get("hypothesis", "")
             hypo_input = st.text_input("🎯 Hypothesis", value=st.session_state.edited_hypothesis.get(ex_id, default_hypo), key=f"hypo_{ex_id}")
             st.session_state.edited_hypothesis[ex_id] = hypo_input
@@ -187,7 +199,7 @@ if uploaded_file:
 
             edited_premises = st.session_state.edited_premises.get(ex_id)
             if edited_premises is not None:
-                ex["premises"] = [p.strip() for p in edited_premises.strip().split("\n") if p.strip()]
+                ex["premises"] = [p.strip() for p in edited_premises if p.strip()]
 
             export.append(ex)
 
