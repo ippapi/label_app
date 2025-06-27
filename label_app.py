@@ -79,17 +79,30 @@ if uploaded_file:
     filtered_data = []
     for ex in data:
         ex_id = ex["id"]
+    
+        # Search theo parsed ID
         if st.session_state.filter_by_id and st.session_state.filter_by_id.lower() not in st.session_state.id[ex_id].lower():
             continue
-        if st.session_state.filter_by_label and st.session_state.auto_label[ex_id] != st.session_state.filter_by_label:
-            continue
-        if st.session_state.filter_by_agreement and st.session_state.agreement[ex_id] != st.session_state.filter_by_agreement:
-            continue
-        if st.session_state.filter_by_assign_type:
-            assign_type = st.session_state.assign_type.get(ex_id, "Auto")
-            if assign_type != st.session_state.filter_by_assign_type:
+    
+        # Lọc theo auto_label
+        if st.session_state.filter_by_label:
+            auto_label = st.session_state.auto_label.get(ex_id)
+            if auto_label != st.session_state.filter_by_label:
                 continue
+    
+        # Lọc theo agreement
+        if st.session_state.filter_by_agreement:
+            agreement = st.session_state.agreement.get(ex_id)
+            if agreement != st.session_state.filter_by_agreement:
+                continue
+    
+        # Lọc theo assign_type: Ưu tiên lấy từ ex nếu có, rồi mới đến session_state
+        assign_type = ex.get("assign_type", st.session_state.assign_type.get(ex_id, "Auto"))
+        if st.session_state.filter_by_assign_type and assign_type != st.session_state.filter_by_assign_type:
+            continue
+    
         filtered_data.append(ex)
+
 
     # Phân trang
     per_page = 5
