@@ -109,6 +109,17 @@ if uploaded_file:
     else:
         for idx, ex in enumerate(page_data):
             ex_id = ex["id"]
+            if ex_id not in st.session_state.assign_type and "assign_type" in ex:
+                st.session_state.assign_type[ex_id] = ex["assign_type"]
+            
+            if ex_id not in st.session_state.final_label and "final_label" in ex:
+                st.session_state.final_label[ex_id] = ex["final_label"]
+        
+            if ex_id not in st.session_state.edited_hypothesis and "hypothesis" in ex:
+                st.session_state.edited_hypothesis[ex_id] = ex["hypothesis"]
+            
+            if ex_id not in st.session_state.edited_premises and "premises" in ex:
+                st.session_state.edited_premises[ex_id] = ex["premises"]
             with st.container():
                 st.markdown("---")
                 st.markdown(f"### 🧾 Sample {start_idx + idx + 1}: `{ex_id}`")
